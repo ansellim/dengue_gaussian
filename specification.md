@@ -179,6 +179,28 @@ surveillance data is known to exhibit overdispersion due to clustered transmissi
 spatially heterogeneous reporting, and serotype-dependent case detection ratios
 (Tan et al., 2019, Am J Epidemiol).
 
+**Case ascertainment.** The model assumes 100% case ascertainment, meaning every
+dengue infection that produces symptoms is captured by Singapore's surveillance
+system. This assumption is supported by Singapore's mandatory notification
+requirement for dengue (Infectious Diseases Act), active laboratory surveillance
+(NS1 rapid test and PCR confirmation), and comprehensive healthcare infrastructure.
+However, asymptomatic infections (estimated at ~75% of DENV infections globally;
+Bhatt et al. 2013) are not captured. The Rt estimated here therefore reflects
+symptomatic-case-to-symptomatic-case transmission, which is the standard
+interpretation for renewal equation models applied to surveillance data.
+
+**Reporting delay.** The delay from symptom onset to case notification in Singapore
+is approximately 5-7 days (healthcare seeking ~3-4 days, laboratory confirmation
+~1-3 days, mandatory notification within 24 hours). At weekly temporal resolution,
+this delay is less than one time step and is absorbed into the generation interval
+and negative binomial overdispersion. This follows standard practice in the dengue
+Rt estimation literature: Cori et al. (2013) and Lau et al. (2022, PLOS Comp Biol)
+use observed cases directly in the renewal equation without explicit delay modeling,
+noting the assumption that the "observation rate for dengue cases be stable over
+time." Explicit delay convolution (as in EpiNow2; Abbott et al. 2020) is standard
+for daily COVID-19 data with highly variable reporting delays, but is unnecessary
+for weekly dengue surveillance data with relatively stable reporting processes.
+
 
 ### 4. Gaussian Process Specification
 

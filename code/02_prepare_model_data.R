@@ -129,12 +129,22 @@ df <- df |>
   )
 
 # Wolbachia and NPI are already on interpretable scales (0-1)
-# Fill any missing intervention values
+# Fill any missing intervention values (kept for reference, not used in model)
 df <- df |>
   mutate(
     wolbachia_coverage = replace_na(wolbachia_coverage, 0),
     npi_intensity = replace_na(npi_intensity, 0)
   )
+
+# ASSUMPTIONS:
+# 1. 100% case ascertainment rate. Singapore has mandatory dengue notification
+#    and active laboratory surveillance, so under-reporting is expected to be
+#    minimal. The model does not include an ascertainment fraction parameter.
+#    Note: asymptomatic infections (~75% globally; Bhatt et al. 2013) are not
+#    captured. Rt reflects symptomatic-case-to-symptomatic-case transmission.
+# 2. Constant reporting delay (~5-7 days onset-to-notification) absorbed into
+#    the generation interval and negative binomial overdispersion. This is
+#    standard for weekly dengue Rt estimation (Cori et al. 2013; Lau et al. 2022).
 
 cat(sprintf("  Temperature: mean=%.2f, sd=%.2f\n", temp_mean_val, temp_sd_val))
 cat(sprintf("  Rainfall: mean=%.1f, sd=%.1f\n", rain_mean_val, rain_sd_val))
@@ -344,14 +354,7 @@ X_climate <- cbind(
   rain = df$rain_std[(S + 1):N]
 )
 
-X_full <- cbind(
-  temp = df$temp_std[(S + 1):N],
-  rain = df$rain_std[(S + 1):N],
-  wolbachia = df$wolbachia_coverage[(S + 1):N],
-  npi = df$npi_intensity[(S + 1):N]
-)
-
-# Stan data list
+# Stan data list (climate-only model)
 stan_data <- list(
   # Dimensions
   N = N,
@@ -369,13 +372,9 @@ stan_data <- list(
   # Generation interval
   gi = gi_baseline,
 
-  # Covariates for Model 1 (climate only)
+  # Covariates (climate only: temperature + rainfall)
   K_climate = 2,
-  X_climate = X_climate,
-
-  # Covariates for Model 2 (full)
-  K_full = 4,
-  X_full = X_full
+  X_climate = X_climate
 )
 
 # Also prepare sensitivity analysis data
@@ -426,7 +425,7 @@ cat("  Saved: data/model_data.rds\n")
 
 # Also save as CSV for inspection
 df |>
-  select(date, cases, temp_std, rain_std, wolbachia_coverage, npi_intensity) |>
+  select(date, cases, temp_std, rain_std) |>
   write_csv("../data/model_data.csv")
 cat("  Saved: data/model_data.csv\n")
 
@@ -449,11 +448,13 @@ cat(sprintf("\nDataset summary:
     Median: %.0f
     Max: %.0f
 
-  Covariates (standardized where applicable):
+  Covariates (climate only, standardized):
     Temperature (lag %d weeks): mean=0, sd=1
     Rainfall (lag %d weeks): mean=0, sd=1
-    Wolbachia coverage: %.1f%% to %.1f%%
-    NPI intensity: %.0f%% to %.0f%%
+
+  Assumptions:
+    100%% case ascertainment (mandatory notification)
+    Reporting delay (~5-7d) absorbed at weekly resolution
 
   HSGP configuration:
     Basis functions (M): %d
@@ -472,12 +473,10 @@ cat(sprintf("\nDataset summary:
             min(df$date), max(df$date),
             min(cases), median(cases), max(cases),
             CLIMATE_LAG, CLIMATE_LAG,
-            min(df$wolbachia_coverage) * 100, max(df$wolbachia_coverage) * 100,
-            min(df$npi_intensity) * 100, max(df$npi_intensity) * 100,
             M, L_factor,
             gi_base$mean_days, gi_base$mean_weeks,
             gi_baseline[1] * 100, gi_baseline[2] * 100,
             gi_baseline[3] * 100, gi_baseline[4] * 100,
             gi_baseline[5] * 100, gi_baseline[6] * 100))
 
-cat("\nNext step: Fit Stan models using 06_fit_models.R\n")
+cat("\nNext step: Fit Stan models using 13_fit_model3.R\n")

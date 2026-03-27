@@ -63,12 +63,10 @@ n_sims <- 500  # Number of prior simulations
 prior_Rt <- matrix(NA, nrow = n_sims, ncol = N_model)
 prior_cases <- matrix(NA, nrow = n_sims, ncol = N_model)
 
-# Prior specifications (from 05_model2_full.stan)
+# Prior specifications (from 05_model3_climate_only.stan)
 # mu ~ Normal(0, 0.5)
-# beta[1] (temp) ~ Normal(0, 0.5)
-# beta[2] (rain) ~ Normal(0, 0.5)
-# beta[3] (wolbachia) ~ Normal(-0.3, 0.5)
-# beta[4] (npi) ~ Normal(0, 0.5)
+# beta_climate[1] (temp) ~ Normal(0, 0.5)
+# beta_climate[2] (rain) ~ Normal(0, 0.5)
 # log_alpha ~ Normal(-1.2, 0.5)
 # log_rho ~ Normal(log(6), 0.5)
 # phi ~ HalfNormal(0, 10) -- we'll use truncated normal
@@ -77,14 +75,12 @@ cat("  Prior specifications:\n")
 cat("    mu ~ Normal(0, 0.5)\n")
 cat("    beta_temp ~ Normal(0, 0.5)\n")
 cat("    beta_rain ~ Normal(0, 0.5)\n")
-cat("    beta_wolbachia ~ Normal(-0.3, 0.5)\n")
-cat("    beta_npi ~ Normal(0, 0.5)\n")
-cat("    log_alpha ~ Normal(-1.6, 0.4)\n")
+cat("    log_alpha ~ Normal(-1.2, 0.5)\n")
 cat("    log_rho ~ Normal(log(6), 0.5)\n")
 cat("    phi ~ HalfNormal(0, 10)\n\n")
 
 # Extract covariates
-X_full <- stan_data$X_full
+X_climate <- stan_data$X_climate
 gi <- stan_data$gi
 S <- stan_data$S
 M <- stan_data$M
@@ -109,23 +105,19 @@ spd_matern32 <- function(omega, alpha, rho) {
 for (i in 1:n_sims) {
   # Sample from priors
   mu <- rnorm(1, 0, 0.5)
-  beta <- c(
+  beta_climate <- c(
     rnorm(1, 0, 0.5),      # temp
-    rnorm(1, 0, 0.5),      # rain
-    rnorm(1, -0.3, 0.5),   # wolbachia
-    rnorm(1, 0, 0.5)       # npi
+    rnorm(1, 0, 0.5)       # rain
   )
-  log_alpha <- rnorm(1, -1.6, 0.4)
+  log_alpha <- rnorm(1, -1.2, 0.5)
   log_rho <- rnorm(1, log(6), 0.5)
   phi <- abs(rnorm(1, 0, 10))  # Half-normal
 
   alpha <- exp(log_alpha)
   rho <- exp(log_rho)
 
-  # Compute covariate effects
-  f_climate <- X_full[, 1] * beta[1] + X_full[, 2] * beta[2]
-  f_wolbachia <- X_full[, 3] * beta[3]
-  f_npi <- X_full[, 4] * beta[4]
+  # Compute covariate effects (climate only)
+  f_climate <- X_climate[, 1] * beta_climate[1] + X_climate[, 2] * beta_climate[2]
 
   # GP realization via HSGP spectral decomposition
   spd_weights <- sqrt(sapply(sqrt_eigenvalues, spd_matern32,
@@ -134,7 +126,7 @@ for (i in 1:n_sims) {
   f_residual <- as.numeric(PHI %*% (spd_weights * beta_gp))
 
   # log(Rt)
-  log_Rt <- mu + f_climate + f_wolbachia + f_npi + f_residual
+  log_Rt <- mu + f_climate + f_residual
   prior_Rt[i, ] <- exp(log_Rt)
 
   # Simulate cases using renewal equation
@@ -280,43 +272,38 @@ p_Rt_intervals <- ggplot(Rt_summary, aes(x = week)) +
 # --- Plot 4: Prior distributions for key parameters ---
 param_samples <- tibble(
   mu = rnorm(4000, 0, 0.5),
-  beta_wolbachia = rnorm(4000, -0.3, 0.5),
-  beta_npi = rnorm(4000, 0, 0.5),
-  alpha = exp(rnorm(4000, -1.6, 0.4)),
+  alpha = exp(rnorm(4000, -1.2, 0.5)),
   rho = exp(rnorm(4000, log(6), 0.5))
 ) |>
   mutate(
-    wolbachia_effect = exp(beta_wolbachia),
-    npi_effect = exp(beta_npi),
     baseline_Rt = exp(mu)
   )
 
-p_prior_wolbachia <- ggplot(param_samples, aes(x = wolbachia_effect)) +
+p_prior_baseline <- ggplot(param_samples, aes(x = baseline_Rt)) +
   geom_histogram(aes(y = after_stat(density)), bins = 50,
                  fill = "steelblue", alpha = 0.7) +
   geom_vline(xintercept = 1, linetype = "dashed", color = "red") +
-  coord_cartesian(xlim = c(0, 3)) +
+  coord_cartesian(xlim = c(0, 5)) +
   labs(
-    title = "Prior: Wolbachia Effect",
-    subtitle = "Normal(-0.3, 0.5) on log scale",
-    x = "Multiplicative effect on Rt",
+    title = "Prior: Baseline Rt",
+    subtitle = "Normal(0, 0.5) on log scale",
+    x = "Baseline Rt",
     y = "Density"
   )
 
-p_prior_npi <- ggplot(param_samples, aes(x = npi_effect)) +
+p_prior_gp <- ggplot(param_samples, aes(x = alpha)) +
   geom_histogram(aes(y = after_stat(density)), bins = 50,
                  fill = "steelblue", alpha = 0.7) +
-  geom_vline(xintercept = 1, linetype = "dashed", color = "red") +
-  coord_cartesian(xlim = c(0, 3)) +
+  coord_cartesian(xlim = c(0, 2)) +
   labs(
-    title = "Prior: NPI Effect",
-    subtitle = "Normal(0, 0.5) on log scale",
-    x = "Multiplicative effect on Rt",
+    title = "Prior: GP Amplitude",
+    subtitle = "LogNormal(-1.2, 0.5)",
+    x = "alpha (marginal SD)",
     y = "Density"
   )
 
 # --- Combine and save ---
-p_combined <- (p_Rt_prior | p_Rt_intervals) / (p_cases_dist | p_prior_wolbachia)
+p_combined <- (p_Rt_prior | p_Rt_intervals) / (p_cases_dist | p_prior_baseline)
 
 ggsave("../results/figures/prior_predictive_summary.png", p_combined,
        width = 14, height = 10, dpi = 150)
@@ -327,10 +314,6 @@ ggsave("../results/figures/prior_predictive_Rt_trajectories.png", p_Rt_prior,
        width = 10, height = 6, dpi = 150)
 ggsave("../results/figures/prior_predictive_cases.png", p_cases_dist,
        width = 8, height = 6, dpi = 150)
-ggsave("../results/figures/prior_wolbachia_effect.png", p_prior_wolbachia,
-       width = 6, height = 5, dpi = 150)
-ggsave("../results/figures/prior_npi_effect.png", p_prior_npi,
-       width = 6, height = 5, dpi = 150)
 
 # ==============================================================================
 # 5. ASSESSMENT

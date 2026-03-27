@@ -5,7 +5,7 @@
 # Posterior predictive checks for dengue Rt estimation model
 # Verifies the fitted model can reproduce key features of observed data
 #
-# Input: data/model_data.rds, results/fit_model2.rds
+# Input: data/model_data.rds, results/fit_model3.rds (or fit_model2.rds)
 # Output: results/figures/posterior_predictive_*.png
 # ==============================================================================
 
@@ -46,7 +46,9 @@ metadata <- model_data$metadata
 
 # Try to load the best available fit
 fit_file <- NULL
-for (f in c("../results/fit_model2.rds")) {
+for (f in c("../results/fit_model3.rds",
+            "../results/fit_model2_short_gp.rds",
+            "../results/fit_model2.rds")) {
   if (file.exists(f)) {
     fit_file <- f
     break
@@ -54,7 +56,7 @@ for (f in c("../results/fit_model2.rds")) {
 }
 
 if (is.null(fit_file)) {
-  stop("No fitted model found. Run 06_fit_models.R first.")
+  stop("No fitted model found. Run 13_fit_model3.R first.")
 }
 
 cat(sprintf("  Loading: %s\n", fit_file))
