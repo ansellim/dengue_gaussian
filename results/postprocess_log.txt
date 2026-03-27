@@ -1,0 +1,103 @@
+── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+✔ dplyr     1.2.0     ✔ readr     2.2.0
+✔ forcats   1.0.1     ✔ stringr   1.6.0
+✔ ggplot2   4.0.2     ✔ tibble    3.3.1
+✔ lubridate 1.9.5     ✔ tidyr     1.3.2
+✔ purrr     1.2.1     
+── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
+This is cmdstanr version 0.8.0
+- CmdStanR documentation and vignettes: mc-stan.org/cmdstanr
+- CmdStan path: /mnt/b1/ansellim/.cmdstan/cmdstan-2.38.0
+- CmdStan version: 2.38.0
+This is posterior version 1.6.1
+
+Attaching package: ‘posterior’
+
+The following objects are masked from ‘package:stats’:
+
+    mad, sd, var
+
+The following objects are masked from ‘package:base’:
+
+    %in%, match
+
+This is bayesplot version 1.15.0
+- Online documentation and vignettes at mc-stan.org/bayesplot
+- bayesplot theme set to bayesplot::theme_default()
+   * Does _not_ affect other ggplot2 plots
+   * See ?bayesplot_theme_set for details on theme setting
+
+Attaching package: ‘bayesplot’
+
+The following object is masked from ‘package:posterior’:
+
+    rhat
+
+====================================================================== 
+DENGUE RT ESTIMATION - POST-PROCESSING
+====================================================================== 
+
+Loading data and model fit...
+  Loading: ../results/fit_model3.rds
+  Loaded 574 modeled weeks
+
+Extracting posterior summaries...
+
+Generating parameter summaries...
+  Saved: results/parameter_summary.csv
+
+--- Key Parameter Estimates ---
+
+Multiplicative effects on Rt (per 1 SD change):
+  temp_effect: 0.989 (90% CI: 0.969 - 1.009)
+  rain_effect: 1.003 (90% CI: 0.986 - 1.020)
+
+Variance decomposition (proportion of log(Rt) variance):
+  prop_climate: 0.4% (90% CI: 0.0% - 1.4%)
+  prop_residual: 99.6% (90% CI: 98.6% - 100.0%)
+
+Generating Rt trajectory plots...
+  Saved: results/figures/rt_with_cases.png
+
+Generating decomposition plots...
+  Saved: results/figures/decomposition.png
+
+Generating posterior predictive checks...
+
+Posterior predictive coverage:
+  80% interval: 91.8%
+  95% interval: 98.1%
+  Saved: results/figures/ppc_model2.png
+
+Generating effect size plot...
+  Saved: results/figures/effect_sizes.png
+
+Saving summary data...
+  Saved: results/rt_trajectories.csv
+  Saved: results/decomposition.csv
+  Saved: results/ppc_summary.csv
+
+====================================================================== 
+POST-PROCESSING COMPLETE
+====================================================================== 
+
+--- KEY FINDINGS ---
+
+Climate effects on Rt:
+  temp_effect: 0.989 (90% CI: 0.969 - 1.009)
+  rain_effect: 1.003 (90% CI: 0.986 - 1.020)
+
+Variance decomposition:
+  prop_climate: 0.4%
+  prop_residual: 99.6%
+
+
+Output files:
+  results/figures/rt_with_cases.png - Rt with observed cases
+  results/figures/decomposition.png - Component decomposition
+  results/figures/ppc_model2.png - Posterior predictive check
+  results/figures/effect_sizes.png - Climate effect sizes
+  results/*.csv - Summary tables

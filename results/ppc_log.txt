@@ -1,0 +1,151 @@
+── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+✔ dplyr     1.2.0     ✔ readr     2.2.0
+✔ forcats   1.0.1     ✔ stringr   1.6.0
+✔ ggplot2   4.0.2     ✔ tibble    3.3.1
+✔ lubridate 1.9.5     ✔ tidyr     1.3.2
+✔ purrr     1.2.1     
+── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+✖ dplyr::filter() masks stats::filter()
+✖ dplyr::lag()    masks stats::lag()
+ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
+This is cmdstanr version 0.8.0
+- CmdStanR documentation and vignettes: mc-stan.org/cmdstanr
+- CmdStan path: /mnt/b1/ansellim/.cmdstan/cmdstan-2.38.0
+- CmdStan version: 2.38.0
+This is posterior version 1.6.1
+
+Attaching package: ‘posterior’
+
+The following objects are masked from ‘package:stats’:
+
+    mad, sd, var
+
+The following objects are masked from ‘package:base’:
+
+    %in%, match
+
+This is bayesplot version 1.15.0
+- Online documentation and vignettes at mc-stan.org/bayesplot
+- bayesplot theme set to bayesplot::theme_default()
+   * Does _not_ affect other ggplot2 plots
+   * See ?bayesplot_theme_set for details on theme setting
+
+Attaching package: ‘bayesplot’
+
+The following object is masked from ‘package:posterior’:
+
+    rhat
+
+====================================================================== 
+POSTERIOR PREDICTIVE CHECKS
+====================================================================== 
+
+Loading data and fitted model...
+  Loading: ../results/fit_model3.rds
+  N_model = 574 weeks
+  Observed cases: min=24, median=208, max=1792
+
+Extracting posterior predictive samples...
+  Posterior samples: 4000 draws x 574 time points
+
+Generating posterior predictive visualizations...
+Coordinate system already present.
+ℹ Adding new coordinate system, which will replace the existing one.
+Note: in most cases the default test statistic 'mean' is too weak to detect anything of interest.
+Warning message:
+`aes_string()` was deprecated in ggplot2 3.0.0.
+ℹ Please use tidy evaluation idioms with `aes()`.
+ℹ See also `vignette("ggplot2-in-packages")` for more information. 
+Warning message:
+Using `size` aesthetic for lines was deprecated in ggplot2 3.4.0.
+ℹ Please use `linewidth` instead.
+ℹ The deprecated feature was likely used in the bayesplot package.
+  Please report the issue at <https://github.com/stan-dev/bayesplot/issues/>. 
+
+====================================================================== 
+POSTERIOR PREDICTIVE SUMMARIES
+====================================================================== 
+
+Interval Coverage:
+  50% intervals contain observed: 65.3% (nominal: 50%)
+  90% intervals contain observed: 96.9% (nominal: 90%)
+
+Summary Statistics (observed vs replicated):
+  Mean:   observed=286, replicated median=288 (95% CI: 281-295)
+  SD:     observed=296, replicated median=302 (95% CI: 283-323)
+  Max:    observed=1792, replicated median=2005 (95% CI: 1682-2522)
+  Min:    observed=24, replicated median=23 (95% CI: 15-29)
+
+Bayesian p-values (should be near 0.5 for well-calibrated model):
+  Mean: 0.662
+  SD:   0.741
+  Max:  0.888
+  Min:  0.709
+
+RMSE: median=81 (95% CI: 70-94)
+MAE:  median=48 (95% CI: 44-53)
+
+Saving visualizations...
+`stat_bin()` using `bins = 30`. Pick better value `binwidth`.
+`stat_bin()` using `bins = 30`. Pick better value `binwidth`.
+  Saved: results/figures/posterior_predictive_summary.png
+Warning messages:
+1: Removed 6 rows containing missing values or values outside the scale range
+(`geom_ribbon()`). 
+2: Removed 6 rows containing missing values or values outside the scale range
+(`geom_ribbon()`). 
+3: Removed 6 rows containing missing values or values outside the scale range
+(`geom_line()`). 
+4: Removed 6 rows containing missing values or values outside the scale range
+(`geom_point()`). 
+  Saved: results/figures/posterior_predictive_timeseries.png
+  Saved: results/figures/posterior_predictive_intervals.png
+  Saved: results/figures/posterior_predictive_density.png
+`stat_bin()` using `bins = 30`. Pick better value `binwidth`.
+`stat_bin()` using `bins = 30`. Pick better value `binwidth`.
+`stat_bin()` using `bins = 30`. Pick better value `binwidth`.
+`stat_bin()` using `bins = 30`. Pick better value `binwidth`.
+  Saved: results/figures/posterior_predictive_stats.png
+  Saved: results/figures/posterior_predictive_histograms.png
+
+====================================================================== 
+POSTERIOR PREDICTIVE ASSESSMENT
+====================================================================== 
+
+Checks:
+  [WARN] 50% interval coverage reasonable (35-65%)
+  [PASS] 90% interval coverage reasonable (80-100%)
+  [PASS] Observed mean within 95% CI of replicated means
+  [PASS] Observed SD within 95% CI of replicated SDs
+  [PASS] Bayesian p-values not extreme (0.05-0.95)
+
+Overall: REVIEW MODEL FIT - some checks show misfit
+
+====================================================================== 
+RESIDUAL ANALYSIS
+====================================================================== 
+
+Standardized residuals: mean=0.04, sd=0.76
+Residual autocorrelation (lag 1): 0.207
+Outliers (|z| > 2): 10 observations (1.7%)
+`geom_smooth()` using formula = 'y ~ x'
+Warning messages:
+1: Removed 6 rows containing non-finite outside the scale range (`stat_smooth()`). 
+2: Removed 6 rows containing missing values or values outside the scale range
+(`geom_point()`). 
+
+  Saved: results/figures/posterior_predictive_residuals.png
+
+====================================================================== 
+POSTERIOR PREDICTIVE CHECKS COMPLETE
+====================================================================== 
+
+Files saved:
+  results/figures/posterior_predictive_summary.png
+  results/figures/posterior_predictive_timeseries.png
+  results/figures/posterior_predictive_intervals.png
+  results/figures/posterior_predictive_density.png
+  results/figures/posterior_predictive_stats.png
+  results/figures/posterior_predictive_histograms.png
+  results/figures/posterior_predictive_residuals.png
+
