@@ -1,0 +1,28 @@
+DENGUE RT MODEL DIAGNOSTICS
+================================================== 
+Generated: 2026-03-24 21:00:35.061671
+
+Model 0 (Baseline):
+  Divergent transitions: 0
+  Max treedepth exceeded: 0
+  Parameters with Rhat > 1.01: 0
+  Min ESS bulk: 1141
+  Min ESS tail: 2026
+  CONVERGED: YES
+
+Model 1 (Climate):
+  Divergent transitions: 0
+  Max treedepth exceeded: 0
+  Parameters with Rhat > 1.01: 0
+  Min ESS bulk: 1215
+  Min ESS tail: 2263
+  CONVERGED: YES
+
+Model 2 (Full):
+  Divergent transitions: 0
+  Max treedepth exceeded: 0
+  Parameters with Rhat > 1.01: 0
+  Min ESS bulk: 1234
+  Min ESS tail: 2233
+  CONVERGED: YES
+

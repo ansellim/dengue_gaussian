@@ -1,0 +1,35 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# R
+.Rhistory
+renv/library/
+renv/staging/
+renv/cellar/
+renv/sandbox/
+
+# OS
+.DS_Store
+~$*
+
+# Large binary results (regenerable)
+results/*.rds
+results/logs/
+
+# Compiled Stan binaries (no extension, in code/)
+code/03_model0_baseline
+code/04_model1_climate
+code/05_model2_full
+code/05_model2_full_short_gp
+code/05_model2_no_npi
+
+# Presentations
+*.pptx
