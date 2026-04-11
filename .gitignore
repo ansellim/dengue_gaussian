@@ -1,4 +1,4 @@
-# Python-generated files
+# Python
 __pycache__/
 *.py[oc]
 build/
@@ -7,10 +7,12 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
+.venv/
 
 # R
 .Rhistory
+.RData
+.Rproj.user/
 renv/library/
 renv/staging/
 renv/cellar/
@@ -19,17 +21,24 @@ renv/sandbox/
 # OS
 .DS_Store
 ~$*
+Thumbs.db
 
-# Large binary results (regenerable)
+# Large binary results (regenerable from code + data)
 results/*.rds
+results/forecasts/
+results/vae_export/
 results/logs/
 
-# Compiled Stan binaries (no extension, in code/)
-code/03_model0_baseline
-code/04_model1_climate
-code/05_model2_full
-code/05_model2_full_short_gp
-code/05_model2_no_npi
+# Compiled Stan binaries (platform-specific, regenerated on compile)
+code/05_model3_climate_only
+code/archive/*_model*[!.stan]
+
+# Figures are regenerable but we track them for convenience
+# (remove this line if you want to track figures in git)
+# results/figures/
 
 # Presentations
 *.pptx
+
+# Claude Code
+.claude/
