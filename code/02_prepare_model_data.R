@@ -30,20 +30,10 @@ cat("Loading raw data files...\n")
 
 dengue <- read_csv("../data/raw_dengue_cases.csv", show_col_types = FALSE)
 weather <- read_csv("../data/raw_weather.csv", show_col_types = FALSE)
-wolbachia <- read_csv("../data/raw_wolbachia.csv", show_col_types = FALSE)
-
-# Use OxCGRT Stringency Index (validated, open source) instead of arbitrary NPI values
-# Source: https://github.com/OxCGRT/covid-policy-dataset
-# Scale from 0-100 to 0-1 for consistency with other covariates
-npi <- read_csv("../data/raw_npi_oxcgrt.csv", show_col_types = FALSE) |>
-  mutate(npi_intensity = stringency_index / 100) |>  # Scale to 0-1
-  select(date, npi_intensity)
 
 cat(sprintf("  Dengue: %d weeks (%s to %s)\n",
             nrow(dengue), min(dengue$date), max(dengue$date)))
 cat(sprintf("  Weather: %d weeks\n", nrow(weather)))
-cat(sprintf("  Wolbachia: %d weeks\n", nrow(wolbachia)))
-cat(sprintf("  NPI: %d weeks\n", nrow(npi)))
 
 # ==============================================================================
 # 2. MERGE DATASETS
@@ -54,20 +44,14 @@ cat("\nMerging datasets...\n")
 # Ensure all dates are Date type
 dengue <- dengue |> mutate(date = as.Date(date))
 weather <- weather |> mutate(date = as.Date(date))
-wolbachia <- wolbachia |> mutate(date = as.Date(date))
-npi <- npi |> mutate(date = as.Date(date))
 
 # Create year_week for joining (handles date alignment issues)
 dengue <- dengue |> mutate(year_week = paste0(year(date), "-", sprintf("%02d", isoweek(date))))
 weather <- weather |> mutate(year_week = paste0(year(date), "-", sprintf("%02d", isoweek(date))))
-wolbachia <- wolbachia |> mutate(year_week = paste0(year(date), "-", sprintf("%02d", isoweek(date))))
-npi <- npi |> mutate(year_week = paste0(year(date), "-", sprintf("%02d", isoweek(date))))
 
-# Merge all datasets using year_week
+# Merge datasets using year_week
 df <- dengue |>
-  left_join(weather |> select(-date), by = "year_week") |>
-  left_join(wolbachia |> select(-date), by = "year_week") |>
-  left_join(npi |> select(-date), by = "year_week")
+  left_join(weather |> select(-date), by = "year_week")
 
 # Filter to complete cases and study period (2012-2022)
 df <- df |>
@@ -126,14 +110,6 @@ df <- df |>
     temp_std_lag6 = (temp_lag6 - temp_mean_val) / temp_sd_val,
     rain_std_lag2 = (rain_lag2 - rain_mean_val) / rain_sd_val,
     rain_std_lag6 = (rain_lag6 - rain_mean_val) / rain_sd_val
-  )
-
-# Wolbachia and NPI are already on interpretable scales (0-1)
-# Fill any missing intervention values (kept for reference, not used in model)
-df <- df |>
-  mutate(
-    wolbachia_coverage = replace_na(wolbachia_coverage, 0),
-    npi_intensity = replace_na(npi_intensity, 0)
   )
 
 # ASSUMPTIONS:

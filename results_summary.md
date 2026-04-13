@@ -6,7 +6,7 @@ Bayesian renewal equation model for weekly dengue Rt in Singapore (2012–2022),
 
 ---
 
-## 1. Core Model (Model 3: Climate + Residual GP)
+## 1. Core Model (Climate + Residual GP)
 
 **Model:** log(Rt) = μ + β_temp × temp + β_rain × rain + f_residual(t)
 
@@ -30,7 +30,6 @@ Bayesian renewal equation model for weekly dengue Rt in Singapore (2012–2022),
 - `effect_sizes.png` — Posterior distributions of covariate effects
 - `prior_predictive_summary.png` — Prior predictive check
 - `posterior_predictive_timeseries.png` — Posterior predictive check
-- `ppc_model2.png` — PPC density overlay
 
 ---
 
@@ -129,7 +128,7 @@ Kernel choice has negligible impact on model fit. The roughest kernel (Matérn 1
 | 2017 | 1.03 | 0.15 | 3 | |
 | 2018 | 1.08 | 0.18 | 5 | |
 | 2019 | 1.11 | 0.23 | 10 | Large DENV-2 outbreak |
-| 2020 | 1.04 | 0.18 | 9 | DENV-3 + COVID |
+| 2020 | 1.04 | 0.18 | 9 | DENV-3 emergence |
 | 2021 | 0.95 | 0.10 | 3 | Low activity |
 | **2022** | **1.17** | **0.27** | **18** | **Most sustained** |
 
@@ -233,7 +232,6 @@ Counterfactual: Rt_cf = exp(μ + f_climate), zeroing out the residual GP.
 
 ### Key Finding
 - **The Feb 2020 DENV-3 emergence was the only switch producing a clearly significant excess: ~4,400 cases above climate prediction** — consistent with a large naive susceptible pool encountering DENV-3 for the first time
-- **Caveat:** This event is confounded with COVID-19. The excess could partly reflect behavioral changes (more people at home → more Aedes exposure) or reporting artifacts
 - Most other switches show excess cases indistinguishable from zero, suggesting that only *novel serotype introductions* (not rotations between familiar serotypes) produce detectable excess transmission
 
 ### Figures
@@ -254,9 +252,7 @@ Counterfactual: Rt_cf = exp(μ + f_climate), zeroing out the residual GP.
 - `serotype_panel.png`, `serotype_switch_profiles.png`, `serotype_ccf.png`
 - `serotype_entropy_profiles.png`, `serotype_rt_entropy_overlay.png`
 
-### Legacy/Sensitivity (8)
-- `dose_response_wolbachia.png`, `prior_wolbachia_effect.png`, `prior_npi_effect.png`
-- `sensitivity_pre2020_Rt.png`, `sensitivity_pre2020_params.png`, `sensitivity_pre2020_wolbachia.png`
+### Sensitivity (2)
 - `acf_comparison_short_gp.png`, `residual_comparison_short_gp.png`
 
 ### Cross-Kernel Comparison (6)

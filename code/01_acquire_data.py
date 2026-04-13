@@ -5,7 +5,6 @@
 Download and process data for dengue Rt estimation:
 1. Weekly dengue case counts from data.gov.sg (MOH Weekly Infectious Diseases Bulletin)
 2. Meteorological data from Meteostat (Singapore Changi Airport)
-3. Construct Wolbachia coverage and COVID-19 NPI covariates
 
 Output: data/raw_*.csv files ready for merging in 02_prepare_model_data.R
 """
@@ -246,7 +245,7 @@ def create_synthetic_dengue_data():
             epidemic[i] = 0.8 * np.exp(-((week_of_year - 26) ** 2) / 200)
 
     # Trend component
-    trend = -0.3 * (t / n)  # Slight downward trend due to Wolbachia
+    trend = -0.3 * (t / n)
 
     # Combine components
     log_rt = 0.1 + seasonal + epidemic + trend
@@ -399,106 +398,6 @@ def process_weather_data(df):
 
 
 # =============================================================================
-# 3. WOLBACHIA COVERAGE AND COVID-19 NPI DATA
-# =============================================================================
-
-def create_wolbachia_coverage():
-    """
-    Create Wolbachia coverage time series based on literature and press releases.
-    Coverage is proportion of households under releases (0 to 1).
-    """
-    print("\n" + "=" * 60)
-    print("Creating Wolbachia coverage time series...")
-    print("=" * 60)
-
-    # Key time points and coverage levels (from specification)
-    coverage_points = [
-        ('2012-01-01', 0.0),      # Pre-intervention
-        ('2016-09-30', 0.0),      # Pre-intervention
-        ('2016-10-01', 0.005),    # Pilot starts (3 small sites)
-        ('2018-12-31', 0.005),    # Still pilot phase
-        ('2019-06-01', 0.057),    # Expansion begins (Lim et al. 2024)
-        ('2020-06-01', 0.233),    # Major expansion (Lim et al. 2024)
-        ('2021-06-01', 0.25),     # Continued expansion (MSE replies)
-        ('2022-06-01', 0.28),     # Further expansion
-        ('2022-12-31', 0.31),     # NEA press release Jul 2022
-    ]
-
-    # Create weekly date range
-    dates = pd.date_range(start='2012-01-01', end='2022-12-31', freq='W-SUN')
-
-    # Linear interpolation between known points
-    coverage_dates = [pd.to_datetime(d) for d, _ in coverage_points]
-    coverage_values = [v for _, v in coverage_points]
-
-    df = pd.DataFrame({'date': dates})
-    df['wolbachia_coverage'] = np.interp(
-        df['date'].values.astype(np.int64),
-        [d.value for d in coverage_dates],
-        coverage_values
-    )
-
-    print(f"  Created {len(df)} weekly records")
-    print(f"  Coverage range: {df['wolbachia_coverage'].min():.3f} to {df['wolbachia_coverage'].max():.3f}")
-
-    return df
-
-
-def create_npi_data():
-    """
-    Create COVID-19 NPI intensity time series.
-    Coding: 0 = no restrictions, 1 = full lockdown (Circuit Breaker)
-    """
-    print("\n" + "=" * 60)
-    print("Creating COVID-19 NPI time series...")
-    print("=" * 60)
-
-    # Key dates and NPI levels (from specification)
-    npi_phases = [
-        ('2012-01-01', 0.0),      # Pre-COVID
-        ('2020-04-06', 0.0),      # Pre-Circuit Breaker
-        ('2020-04-07', 1.0),      # Circuit Breaker starts
-        ('2020-06-01', 1.0),      # Circuit Breaker ends
-        ('2020-06-02', 0.67),     # Phase 1 starts
-        ('2020-06-18', 0.67),     # Phase 1 ends
-        ('2020-06-19', 0.33),     # Phase 2 starts
-        ('2020-12-27', 0.33),     # Phase 2 ends
-        ('2020-12-28', 0.1),      # Phase 3 starts
-        ('2021-06-30', 0.1),      # Gradual relaxation
-        ('2021-07-01', 0.0),      # Near-normal
-        ('2022-12-31', 0.0),      # End of study period
-    ]
-
-    # Create weekly date range
-    dates = pd.date_range(start='2012-01-01', end='2022-12-31', freq='W-SUN')
-
-    # Step function interpolation (use previous value)
-    npi_dates = [pd.to_datetime(d) for d, _ in npi_phases]
-    npi_values = [v for _, v in npi_phases]
-
-    df = pd.DataFrame({'date': dates})
-
-    # For each date, find the most recent NPI level
-    def get_npi_level(date):
-        for i in range(len(npi_dates) - 1, -1, -1):
-            if date >= npi_dates[i]:
-                return npi_values[i]
-        return 0.0
-
-    df['npi_intensity'] = df['date'].apply(get_npi_level)
-
-    print(f"  Created {len(df)} weekly records")
-    print(f"  NPI phases captured:")
-    print(f"    - Pre-COVID: {(df['npi_intensity'] == 0).sum()} weeks")
-    print(f"    - Circuit Breaker: {(df['npi_intensity'] == 1.0).sum()} weeks")
-    print(f"    - Phase 1: {(df['npi_intensity'] == 0.67).sum()} weeks")
-    print(f"    - Phase 2: {(df['npi_intensity'] == 0.33).sum()} weeks")
-    print(f"    - Phase 3: {(df['npi_intensity'] == 0.1).sum()} weeks")
-
-    return df
-
-
-# =============================================================================
 # MAIN EXECUTION
 # =============================================================================
 
@@ -518,16 +417,6 @@ if __name__ == "__main__":
     weather_df = process_weather_data(weather_raw)
     weather_df.to_csv(os.path.join(DATA_DIR, 'raw_weather.csv'), index=False)
     print(f"Saved: data/raw_weather.csv ({len(weather_df)} rows)")
-
-    # 3. Create Wolbachia coverage data
-    wolbachia_df = create_wolbachia_coverage()
-    wolbachia_df.to_csv(os.path.join(DATA_DIR, 'raw_wolbachia.csv'), index=False)
-    print(f"Saved: data/raw_wolbachia.csv ({len(wolbachia_df)} rows)")
-
-    # 4. Create NPI data
-    npi_df = create_npi_data()
-    npi_df.to_csv(os.path.join(DATA_DIR, 'raw_npi.csv'), index=False)
-    print(f"Saved: data/raw_npi.csv ({len(npi_df)} rows)")
 
     print("\n" + "=" * 70)
     print("DATA ACQUISITION COMPLETE")

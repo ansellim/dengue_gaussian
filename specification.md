@@ -1,23 +1,22 @@
-# Semiparametric Decomposition of Dengue Rt via Composite Gaussian Process Kernels
+# Semiparametric Decomposition of Dengue Rt with a Gaussian Process Residual
 
 ## Project Specification
 
 ### 1. Motivation and Scope
 
 Singapore's dengue epidemiology is shaped by multiple interacting drivers operating at
-different timescales: climate variation (temperature and rainfall affecting vector biology),
-vector control interventions (particularly the phased rollout of Project Wolbachia),
-non-pharmaceutical interventions during the COVID-19 pandemic, and slower-moving
-processes such as serotype cycling and population immunity shifts. Standard approaches
-to estimating the effective reproduction number (Rt) either use a single flexible smoother
-(as in EpiNow2) that conflates all sources of variation, or purely parametric covariate
-models that impose rigid functional forms.
+different timescales: climate variation (temperature and rainfall affecting vector biology)
+and slower-moving processes such as serotype cycling and population immunity shifts.
+Standard approaches to estimating the effective reproduction number (Rt) either use a
+single flexible smoother (as in EpiNow2) that conflates all sources of variation, or
+purely parametric covariate models that impose rigid functional forms.
 
 This project builds a renewal equation-based model of dengue Rt in Singapore where
-log(Rt) is decomposed into additive components, each reflecting a distinct epidemiological
-driver with its own prior structure. The framework allows us to ask: conditional on
-measured climate variation and known interventions, what residual temporal structure
-remains in Rt, and what does that residual tell us about unmeasured drivers?
+log(Rt) is decomposed into additive components: an intercept, climate covariates, and
+a residual Gaussian process capturing unmeasured temporal structure. The framework
+allows us to ask: conditional on measured climate variation, what residual temporal
+structure remains in Rt, and what does that residual tell us about unmeasured drivers
+(principally serotype dynamics)?
 
 **What this project is not:** The Rt estimated here is an effective human-to-human
 reproduction number derived from collapsing the human-mosquito-human transmission
@@ -29,35 +28,26 @@ pathway components. This is standard for renewal equation-based Rt estimation ap
 to vector-borne diseases, but should be stated explicitly in any write-up.
 
 **Scope:** A small project (1-2 weeks), implemented in Stan (with R or Python wrapper),
-using only open-source data. The project progresses through a series of models of
-increasing complexity.
+using only open-source data.
 
 
-### 2. Model Progression
+### 2. Model Specification
 
-**Model 0 (Baseline):** Single GP on log(Rt), renewal equation, negative binomial
-observation model. No covariates. Purpose: sanity check, comparison benchmark.
+**Climate-only model:** A renewal equation with climate covariates and a residual GP:
 
-**Model 1 (Climate):** Replace the single GP with:
   log(Rt) = intercept + beta_temp * temp_lag + beta_rain * rain_lag + f_residual(t)
-where temp_lag and rain_lag are lagged weekly meteorological covariates, and f_residual
-is a GP on time capturing unexplained variation. Purpose: quantify how much of Rt
-variation is attributable to climate, and examine the residual structure.
 
-**Model 2 (Climate + Interventions):** Extend Model 1 with:
-  log(Rt) = intercept + beta_temp * temp_lag + beta_rain * rain_lag
-             + beta_wolbachia * coverage_t + beta_npi * lockdown_t + f_residual(t)
-where coverage_t is the approximate proportion of households under Wolbachia releases
-and lockdown_t encodes COVID-19 NPI phases. Purpose: assess whether intervention
-effects on Rt are detectable after accounting for climate.
+where temp_lag and rain_lag are lagged weekly meteorological covariates (4-week lag)
+and f_residual(t) is a Hilbert Space Gaussian Process with a Matern 3/2 kernel capturing
+unexplained temporal variation. Purpose: quantify how much of Rt variation is
+attributable to climate and examine the residual structure.
 
-**Post-hoc Serotype Analysis (after Model 2):** Rather than incorporating serotype data
-as a covariate in the model, we perform a post-hoc analysis of the Model 2 residual GP
-against serotype dynamics. The residual GP from Model 2 captures Rt variation not
-explained by climate, Wolbachia, or NPIs. We ask: does this residual correlate with
-serotype switching and diversity patterns?
+**Post-hoc Serotype Analysis:** Rather than incorporating serotype data as a covariate
+in the model, we perform a post-hoc analysis of the residual GP against serotype
+dynamics. f_residual captures Rt variation not explained by climate. We ask: does this
+residual correlate with serotype switching and diversity patterns?
 
-Models 0-2 are fit on the full 2012-2022 period. The post-hoc serotype analysis is
+The model is fit on the full 2012-2022 period. The post-hoc serotype analysis is
 restricted to 2013-2022 (the period for which serotype proportion data are available).
 The residual GP posterior is averaged from weekly to monthly resolution for comparison
 with the monthly serotype metrics.
@@ -81,18 +71,12 @@ The model has three layers.
 
 #### 3.1 Layer 1: Latent Process for Rt
 
-For Model 0:
-
-    log(Rt) = mu + f(t)
-
-where mu is an intercept and f(t) ~ GP(0, k(t, t')) is a zero-mean Gaussian process.
-
-For Models 1-2, the GP is replaced by:
-
     log(Rt) = mu + X_t * beta + f_residual(t)
 
-where X_t is a row vector of covariates at time t, beta is a vector of regression
-coefficients, and f_residual(t) ~ GP(0, k(t, t')) captures residual temporal variation.
+where mu is an intercept, X_t is a row vector of climate covariates (temperature and
+rainfall, each at a 4-week lag) at time t, beta is the vector of regression coefficients,
+and f_residual(t) ~ GP(0, k(t, t')) is a zero-mean Gaussian process capturing residual
+temporal variation.
 
 **Why not a separate periodic/seasonal kernel?** In equatorial Singapore, dengue
 seasonality is largely climate-driven: monsoon patterns affect temperature and rainfall,
@@ -217,9 +201,8 @@ The Matern 3/2 is the default in EpiNow2 (Abbott et al., 2020) for Rt estimation
 precisely because it permits Rt to change relatively quickly while maintaining continuity.
 
 **Why not a squared exponential?** The SE kernel enforces infinite smoothness, which
-can oversmooth genuine abrupt changes in Rt (e.g., at the onset of COVID lockdowns
-or following a serotype switch). The Matern 3/2 allows sharper transitions while still
-providing regularization.
+can oversmooth genuine abrupt changes in Rt (e.g., following a serotype switch). The
+Matern 3/2 allows sharper transitions while still providing regularization.
 
 The kernel has two hyperparameters:
 - alpha (marginal standard deviation): controls the amplitude of variation in log(Rt)
@@ -253,13 +236,9 @@ HMC/NUTS.
 
 The approximation quality improves with M but each basis function adds a parameter.
 Riutort-Mayol et al. (2023) recommend choosing M such that the highest eigenfrequency
-exceeds the effective bandwidth of the GP's spectral density. Since time is scaled to
-[-1, 1], rho in scaled units is small (e.g., 10 weeks ≈ 0.035 in scaled time for
-N_model ≈ 574), requiring more basis functions than an unscaled parameterization.
-Using M >= ceil(sqrt(3)/rho_min × 2L/π) at the 5th percentile of the rho prior:
-- Models 0, 1 (rho median ~10 weeks, 5th percentile ~4.4 weeks): M ≈ 110
-- Models 2+ (rho median ~15 weeks, 5th percentile ~6.6 weeks): M ≈ 75
-We use M = 110 for all models for simplicity.
+exceeds the effective bandwidth of the GP's spectral density. Using
+M >= ceil(sqrt(3)/rho_min × 2L/π) at the 5th percentile of the rho prior (median
+rho ~6 weeks, 5th percentile ~2.6 weeks) gives M ≈ 183; we use M = 200 for safety.
 
 
 ### 5. Prior Specification
@@ -274,21 +253,14 @@ Rt fluctuates around 1. The SD of 0.5 on the log scale means the prior 95% inter
 the baseline Rt is approximately [exp(-1), exp(1)] = [0.37, 2.72], which comfortably
 spans the plausible range for dengue in Singapore.
 
-#### 5.2 GP length scale: log(rho) ~ Normal(log(rho_weeks), 0.5)
+#### 5.2 GP length scale: log(rho) ~ Normal(log(6), 0.5)
 
 The GP length scale rho is in weeks (time is passed to Stan centered but unscaled).
-We parameterize on the log scale for better HMC geometry.
-
-For Models 0 and 1 (no covariates; GP must capture all temporal structure):
-  log(rho) ~ Normal(log(10), 0.5), giving a prior median of 10 weeks with 95%
-  interval [3.8, 26.6] weeks. The shorter length scale allows the GP to track
-  epidemic dynamics at the timescale of individual outbreaks.
-
-For Models 2+ (climate and intervention covariates absorb short-term variation):
-  log(rho) ~ Normal(log(15), 0.5), giving a prior median of 15 weeks with 95%
-  interval [5.6, 40.0] weeks. The longer length scale reflects that the residual
-  GP needs only to capture variation not explained by the covariates (e.g.,
-  serotype dynamics, immunity shifts).
+We parameterize on the log scale for better HMC geometry. The baseline prior
+log(rho) ~ Normal(log(6), 0.5) gives a prior median of 6 weeks with 95% interval
+approximately [2.2, 16.1] weeks. This short length scale allows the residual GP to
+track outbreak-scale dynamics and serotype-driven immunity shifts that climate
+covariates do not capture.
 
 #### 5.3 GP amplitude: log(alpha) ~ Normal(−1.2, 0.5)
 
@@ -309,14 +281,13 @@ behavior (phi >> 10). This follows EpiNow2's approach. Weekly dengue counts in
 Singapore range from ~50 to ~2000+, and the variance structure likely varies across
 this range.
 
-#### 5.5 Covariate coefficients (Models 1-2): beta ~ Normal(0, 0.5)
+#### 5.5 Climate coefficients: beta ~ Normal(0, 0.5)
 
 Weakly informative, centered at zero (no effect), with SD chosen so that a 1-SD change
 in the covariate (after standardization) shifts log(Rt) by 0.5, corresponding to a
-multiplicative effect on Rt of exp(0.5) ~ 1.65. This is permissive for climate effects
-(where we expect modest effects) and for Wolbachia (where published efficacy estimates
-suggest substantial Rt reduction of ~40-70% in release areas, though diluted at the
-national level).
+multiplicative effect on Rt of exp(0.5) ~ 1.65. This is permissive for the modest
+effects of temperature and rainfall anticipated at weekly resolution in equatorial
+Singapore.
 
 
 ### 6. Data Specification
@@ -347,43 +318,7 @@ Data validation: cross-reference Meteostat data against the data.gov.sg Historic
 Daily Weather Records (dataset ID: d_03bb2eb67ad645d0188342fa74ad7066, covering
 2009-2017) for overlapping years.
 
-#### 6.3 Wolbachia Coverage (2016-2022)
-
-Source: Reconstructed from NEA press releases and published literature.
-
-Approximate proportion of Singapore households under Wolbachia releases:
-
-| Period          | Coverage (%) | Source                                         |
-|-----------------|-------------|------------------------------------------------|
-| 2012 - Sep 2016 | 0           | Pre-intervention                                |
-| Oct 2016 - 2018 | ~0.5        | 3 small pilot sites; negligible at national level|
-| 2019             | ~5.7        | Lim et al. (2024) Lancet Microbe               |
-| 2020             | ~23.3       | Lim et al. (2024) Lancet Microbe               |
-| 2021             | ~24-26      | MSE parliamentary replies                       |
-| Mid-2022         | ~26-31      | NEA press release (Jul 2022 expansion)          |
-
-Entered as a continuous covariate (proportion, 0 to 1), linearly interpolated between
-known data points. Not standardized (already on a natural scale).
-
-#### 6.4 COVID-19 NPI Phases (2020)
-
-Source: Public government announcements. Encoded as a categorical step function:
-
-| Period                | NPI Level | Coding |
-|-----------------------|-----------|--------|
-| Before 7 Apr 2020     | None      | 0      |
-| 7 Apr - 1 Jun 2020    | Circuit Breaker (full lockdown) | 1 |
-| 2 Jun - 18 Jun 2020   | Phase 1 (partial reopening) | 0.67 |
-| 19 Jun - 28 Dec 2020  | Phase 2 (most activities resumed) | 0.33 |
-| 28 Dec 2020 - mid 2021| Phase 3 (near-normal) | 0.1 |
-| After mid-2021        | None      | 0      |
-
-This coding reflects the approximate intensity of mobility restrictions. An alternative
-is to use Google Community Mobility Reports as a continuous covariate, though these
-are only available through October 2022.
-
-
-#### 6.5 Serotype Proportions (2013-2022)
+#### 6.3 Serotype Proportions (2013-2022)
 
 Source: NEA sequencing data, stored in the DengueFever project directory. Two files
 are combined to cover the full period:
@@ -416,8 +351,8 @@ Shannon entropy (H = -Σ_{i=1}^{4} p_i log(p_i), with convention 0 log 0 = 0)
 is computed on both the raw proportions (reflecting observed diversity) and the
 smoothed proportions (for trend visualization).
 
-This data is NOT used in the Stan models (Models 0-2). It is used only in the
-post-hoc analysis of the Model 2 residual GP.
+This data is NOT used in the Stan model. It is used only in the post-hoc analysis of
+the residual GP.
 
 
 ### 7. Implementation Plan
@@ -429,18 +364,18 @@ All code in Stan with R (or Python) wrapper scripts.
 ```
 dengue_gaussian/
   code/
-    01_acquire_data.py        # Download and process data
-    02_prepare_model_data.R   # Merge, lag, standardize, format for Stan
-    03_model0_baseline.stan   # Model 0: single GP baseline
-    04_model1_climate.stan    # Model 1: climate covariates + residual GP
-    05_model2_full.stan       # Model 2: climate + Wolbachia + NPI + residual GP
-    06_fit_models.R           # Fit all models, diagnostics
-    07_postprocess.R          # Posterior summaries, decomposition plots, comparison
-    08_serotype_analysis.R    # Post-hoc: residual GP vs serotype dynamics (2013-2022)
-  data/                       # Raw and processed data
-  results/                    # MCMC output, figures
-  specification.md            # This file
-  README.md                   # Pipeline overview
+    01_acquire_data.py          # Download and process data
+    02_prepare_model_data.R     # Merge, lag, standardize, format for Stan
+    03_prior_predictive.R       # Prior predictive checks
+    05_model3_climate_only.stan # Renewal + climate + residual GP (current model)
+    13_fit_model3.R             # Fit model, diagnostics
+    07_postprocess.R            # Posterior summaries, decomposition plots
+    09_posterior_predictive.R   # Posterior predictive checks
+    08_serotype_analysis.R      # Post-hoc: residual GP vs serotype dynamics (2013-2022)
+  data/                         # Raw and processed data
+  results/                      # MCMC output, figures
+  specification.md              # This file
+  README.md                     # Pipeline overview
 ```
 
 #### 7.2 Diagnostics Checklist
@@ -460,23 +395,22 @@ dengue_gaussian/
 - Leave-future-out predictive log-likelihood (preferred over LOO-CV for time series)
 - Posterior predictive coverage: what fraction of observed weeks fall within the
   80%/95% posterior predictive intervals?
-- Visual comparison of Rt trajectories across models
-- For Models 1-2: examine the residual GP -- does adding covariates reduce the amplitude
-  and shorten the length scale of the residual, indicating that the covariates are
-  explaining structured variation?
+- Visual comparison of Rt trajectories across prior settings
+- Examine the residual GP amplitude and length scale to assess what the climate
+  covariates explain versus what remains in the residual
 
 
 #### 7.4 Post-hoc Serotype Analysis
 
 **What f_residual is.** The residual GP f_residual(t) is the component of log(Rt) not
-explained by the intercept and covariates in Model 2:
+explained by the intercept and climate covariates:
 
     f_residual(t) = log(Rt) - mu - beta_temp * temp_lag - beta_rain * rain_lag
-                    - beta_wolbachia * coverage_t - beta_npi * lockdown_t
 
-It lives on the log(Rt) scale: f_residual(t) = 0 means Rt is fully explained by
-covariates; f_residual(t) > 0 means Rt is higher than covariates predict (unexplained
-excess transmission); f_residual(t) < 0 means lower. It has a full posterior
+It lives on the log(Rt) scale: f_residual(t) = 0 means Rt is fully explained by the
+climate covariates; f_residual(t) > 0 means Rt is higher than climate predicts
+(unexplained excess transmission); f_residual(t) < 0 means lower. It has a full
+posterior
 distribution at each time point, not a single value.
 
 **The hypothesis.** Serotype replacement events increase Rt because infection with one
@@ -560,11 +494,10 @@ totaling approximately 3-4 weeks.
 
 #### 8.3 GP Hyperparameter Priors
 
-Vary the prior on rho (length scale) to assess sensitivity. For Models 2+
-(baseline: log(rho) ~ Normal(log(15), 0.5), median 15 weeks):
-- Shorter: log(rho) ~ Normal(log(10), 0.5), median 10 weeks
-- Baseline: log(rho) ~ Normal(log(15), 0.5), median 15 weeks
-- Longer: log(rho) ~ Normal(log(20), 0.5), median 20 weeks
+Vary the prior on rho (length scale) and alpha (amplitude) to assess sensitivity.
+Baseline: log(rho) ~ Normal(log(6), 0.5) and log(alpha) ~ Normal(-1.2, 0.5). A
+tighter-alpha variant confirms that the variance decomposition is not driven by
+amplitude-prior choices.
 
 #### 8.4 Overdispersion Structure
 
@@ -604,13 +537,6 @@ that overdispersion is warranted by the data.
 - Tan LK, Low SL, Sun H et al. (2019). Force of infection and true infection rate of
   dengue in Singapore: implications for dengue control and management. Am J Epidemiol,
   188(8), 1529-1538.
-
-**Wolbachia intervention:**
-- Lim JT, Bansal S, Chong CS et al. (2024). Efficacy of Wolbachia-mediated sterility
-  to reduce the incidence of dengue: a synthetic control study in Singapore. Lancet
-  Microbe, 5, e422-e432.
-- Ong J, Ho SH, Soh SXH et al. (2020). Gravitrap deployment for adult Aedes aegypti
-  surveillance and its impact on dengue cases. PLoS Negl Trop Dis, 14(8), e0008528.
 
 **Climate and dengue in Singapore:**
 - Lim JT et al. (2025). Climate variation and serotype competition drive dengue

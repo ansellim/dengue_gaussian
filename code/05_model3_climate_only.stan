@@ -1,8 +1,7 @@
 // ==============================================================================
 // Model 3: Climate-only covariates with short GP length scale
 //
-// Simplified model removing Wolbachia and NPI covariates to focus on
-// climate drivers and residual dynamics (serotype switching analysis).
+// Focuses on climate drivers and residual dynamics (serotype switching analysis).
 //
 // log(Rt) = mu + f_climate + f_residual
 //   f_climate  = beta_temp * temp + beta_rain * rain

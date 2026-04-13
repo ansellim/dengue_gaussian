@@ -3,8 +3,8 @@
 # 13_fit_model3.R
 #
 # Fit Model 3: Climate-only covariates (temperature + rainfall) with short GP
-# Removes Wolbachia and NPI covariates to focus on climate drivers and
-# residual dynamics for serotype switching analysis.
+# log(Rt) = mu + beta_temp*temp + beta_rain*rain + f_residual(t)
+# Focuses on climate drivers and residual dynamics for serotype switching analysis.
 #
 # Input:  data/model_data.rds, code/05_model3_climate_only.stan
 # Output: results/fit_model3.rds
@@ -164,10 +164,9 @@ cat("=" |> rep(70) |> paste(collapse = ""), "\n")
 cat("SUMMARY\n")
 cat("=" |> rep(70) |> paste(collapse = ""), "\n\n")
 
-cat("Model 3 removes Wolbachia and NPI covariates, keeping only climate\n")
-cat("(temperature + rainfall) and a residual GP. The residual GP now captures\n")
-cat("all non-climate variation, including serotype dynamics, immunity shifts,\n")
-cat("and intervention effects.\n\n")
+cat("Model 3 uses climate covariates (temperature + rainfall) and a residual\n")
+cat("GP. The residual GP captures all non-climate variation, including\n")
+cat("serotype dynamics and immunity shifts.\n\n")
 
 cat("Next step: Run 08_serotype_analysis.R for early warning analysis\n")
 cat("           Run 14_fit_tight_gp.R for GP sensitivity analysis\n\n")

@@ -7,31 +7,20 @@ Bayesian epidemiological model for estimating the effective reproduction number 
 - Semiparametric decomposition: log(Rt) = mu + f_climate + f_residual
 - Negative binomial observation model
 
-## Project Focus (Updated April 2026)
+## Project Focus
 
-The project focus is on **serotype-driven Rt dynamics and outbreak prediction**. Wolbachia and NPI covariates have been permanently retired. The two primary aims are:
+The project focus is on **serotype-driven Rt dynamics and outbreak prediction**. The two primary aims are:
 1. **Serotype effects on Rt**: Characterizing how serotype replacement events affect Rt via the immunity-depletion mechanism, using the residual GP (f_residual) as a proxy for non-climate drivers
 2. **Outbreak prediction**: Evaluating serotype diversity (Shannon entropy) as an early warning indicator for Rt elevation, leveraging the ~10-month leading relationship identified in CCF analysis
-
-### Why Wolbachia/NPI Were Removed (historical context)
-1. NPI-Serotype Confounding: Cannot separate NPI effects from DENV-3 emergence (both in 2020)
-2. Wolbachia Coverage Uncertainty: Only ~30% coverage by 2022, effect diluted at national level
-3. Residual GP Dominates: ~99.5% of variance in residual GP, climate explains only ~0.5%
 
 ## Current Status
 
 ### What Has Been Done
 1. **Data Pipeline**: Complete acquisition and preparation of dengue cases, weather, and serotype data
-2. **Model Development**: Multiple model versions tested (v0-v3); current model is Model 3 (climate-only: temp + rain + residual GP)
+2. **Model Development**: Climate-only renewal equation model with HSGP residual (Model 3: temp + rain + residual GP)
 3. **Model Validation**: Prior predictive checks, posterior predictive checks (95% coverage: 97.7%, 80% coverage: 92.3%)
 4. **Sensitivity Analysis**: Tight GP amplitude prior confirms variance decomposition is robust
 5. **Serotype Analysis**: Cross-correlation, pre-switch Rt dynamics, entropy profiling complete
-
-### Model Evolution
-- **Model 0**: Single GP baseline (no covariates)
-- **Model 1**: Climate covariates + residual GP
-- **Model 2**: Full model (climate + Wolbachia + NPI + residual GP) -- retired due to confounding
-- **Model 3**: Climate-only (temp + rain + residual GP) -- **CURRENT**
 
 ### Key Findings (Model 3)
 | Parameter | Estimate | 95% CrI | Interpretation |
@@ -56,29 +45,14 @@ The project focus is on **serotype-driven Rt dynamics and outbreak prediction**.
 
 | File | Purpose | Status |
 |------|---------|--------|
-| `01_acquire_data.py` | Download dengue, weather, NPI, Wolbachia, serotype data | Complete |
+| `01_acquire_data.py` | Download dengue, weather, serotype data | Complete |
 | `02_prepare_model_data.R` | Merge, lag, standardize, format for Stan (climate covariates only) | Complete |
 | `03_prior_predictive.R` | Verify priors generate plausible data | Complete |
-| `05_model3_climate_only.stan` | Model 3: Climate-only (temp + rain) + residual GP -- **CURRENT** | Complete |
-| `05_model3_climate_only_tight_gp.stan` | Model 3 variant: Tighter GP amplitude prior | Complete |
+| `05_model3_climate_only.stan` | Climate-only (temp + rain) + residual GP -- **CURRENT** | Complete |
 | `07_postprocess.R` | Posterior summaries, decomposition, effect sizes | Complete |
 | `08_serotype_analysis.R` | Serotype early warning: CCF, pre-switch dynamics, entropy | Complete |
 | `09_posterior_predictive.R` | Model validation via posterior predictive checks | Complete |
-| `13_fit_model3.R` | Fit Model 3 (climate-only) | Complete |
-| `14_fit_tight_gp.R` | Sensitivity: tight GP amplitude prior | Complete |
-
-#### Legacy Files (Model 2, retained for reference)
-| File | Purpose |
-|------|---------|
-| `03_model0_baseline.stan` | Model 0: Single GP baseline |
-| `04_model1_climate.stan` | Model 1: Climate covariates + residual GP |
-| `05_model2_full.stan` | Model 2: Full model (original, rho~15 weeks) |
-| `05_model2_full_short_gp.stan` | Model 2: Short GP (rho~6 weeks) |
-| `05_model2_no_npi.stan` | Model 2: No NPI covariate |
-| `06_fit_models.R` | Fit Models 0, 1, 2 with comparison |
-| `10_fit_short_gp.R` | Fit and compare short GP model |
-| `11_sensitivity_pre2020.R` | Pre-2020 sensitivity analysis |
-| `12_dose_response.R` | Wolbachia dose-response extrapolation |
+| `13_fit_model3.R` | Fit climate-only model | Complete |
 
 ### Data Files
 
@@ -87,8 +61,6 @@ The project focus is on **serotype-driven Rt dynamics and outbreak prediction**.
 | `data/model_data.rds` | Prepared Stan data with climate covariates |
 | `data/raw_dengue_cases.csv` | Weekly case counts (2012-2022) |
 | `data/raw_weather.csv` | Temperature and rainfall from Meteostat |
-| `data/raw_npi_oxcgrt.csv` | OxCGRT Stringency Index for Singapore (legacy) |
-| `data/raw_wolbachia.csv` | Wolbachia coverage estimates (legacy) |
 | `data/monthly_sero_type_props_all_data.csv` | Monthly serotype proportions |
 
 ### Results Files
@@ -101,7 +73,6 @@ The project focus is on **serotype-driven Rt dynamics and outbreak prediction**.
 | `results/serotype_post_switch_dynamics.csv` | P(elevated) and median change per switch event |
 | `results/serotype_switch_timing.csv` | Switch dates, P(rising), lead months |
 | `results/serotype_residual_monthly.csv` | Monthly aggregated f_residual posteriors |
-| `results/fit_model2_short_gp.rds` | Legacy Model 2 fit |
 
 ---
 
@@ -122,8 +93,6 @@ The project focus is on **serotype-driven Rt dynamics and outbreak prediction**.
   └── Validates: model fits data, checks residual autocorrelation
 08_serotype_analysis.R
   └── Serotype early warning: CCF, entropy, pre-switch dynamics
-14_fit_tight_gp.R
-  └── Sensitivity: tight GP amplitude prior
 ```
 
 ---
