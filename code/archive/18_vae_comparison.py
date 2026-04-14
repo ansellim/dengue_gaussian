@@ -52,8 +52,13 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # =============================================================================
 
 _this_dir = Path(__file__).resolve().parent
-if _this_dir.name == "code":
-    PROJECT_ROOT = _this_dir.parent
+# Walk up until we find a parent containing both code/ and results/
+_p = _this_dir
+for _ in range(4):
+    if (_p / "code").exists() and (_p / "results").exists():
+        PROJECT_ROOT = _p
+        break
+    _p = _p.parent
 else:
     PROJECT_ROOT = _this_dir
 
@@ -99,6 +104,10 @@ cases_df = pd.read_csv(VAE_EXPORT / "cases_weekly.csv", parse_dates=["date"])
 f_resid_df = pd.read_csv(VAE_EXPORT / "f_residual_summary.csv", parse_dates=["date"])
 serotype_df = pd.read_csv(VAE_EXPORT / "serotype_info.csv", parse_dates=["year_month"])
 
+# Drop duplicate dates from f_residual (pre-existing artefact of postprocess
+# regeneration). Keep the first occurrence per date.
+f_resid_df = f_resid_df.drop_duplicates(subset="date", keep="first").reset_index(drop=True)
+
 # Serotype switch timing (original file)
 switch_file = RESULTS_DIR / "serotype_switch_timing.csv"
 if switch_file.exists():
@@ -109,13 +118,23 @@ else:
 
 switch_dates = switch_df["switch_date"].values
 
+# -------------------------------------------------------------------------
+# Restrict analysis to 2013-01-01 onwards to match serotype data coverage.
+# The serotype surveillance data starts January 2013; running the VAE on the
+# 2012 weeks (which have no serotype labels) produced "Unknown" points in the
+# latent-space serotype panel. Period-matching the inputs eliminates that
+# confusion and makes the sanity check comparable across panels.
+# -------------------------------------------------------------------------
+ANALYSIS_START = pd.Timestamp("2013-01-01")
+cases_df = cases_df[cases_df["date"] >= ANALYSIS_START].reset_index(drop=True)
+f_resid_df = f_resid_df[f_resid_df["date"] >= ANALYSIS_START].reset_index(drop=True)
+
 N_total = len(cases_df)
 N_model = len(f_resid_df)
-S = N_total - N_model  # burn-in period (should be 6)
 
-print(f"  Total weeks: {N_total}")
-print(f"  Modeled weeks (f_residual): {N_model}")
-print(f"  Burn-in S: {S}")
+print(f"  Analysis window: {ANALYSIS_START.date()} onwards (period-matched to serotype data)")
+print(f"  Case weeks in window: {N_total}")
+print(f"  f_residual weeks in window: {N_model}")
 print(f"  Cases range: {cases_df['date'].min().date()} to {cases_df['date'].max().date()}")
 print(f"  Serotype switches: {len(switch_dates)}")
 
@@ -314,9 +333,29 @@ X_all = torch.tensor(windows).to(device)
 with torch.no_grad():
     z_mu_all = model.encode_mu(X_all).cpu().numpy()  # (N_windows, LATENT_DIM)
 
-# PCA on latent encodings
-pca = PCA(n_components=2)
-z_pca = pca.fit_transform(z_mu_all)  # (N_windows, 2)
+# Sanity check latent encodings
+n_nan = np.isnan(z_mu_all).sum()
+n_inf = np.isinf(z_mu_all).sum()
+print(f"  Latent matrix: shape={z_mu_all.shape}, NaN={n_nan}, Inf={n_inf}, "
+      f"mean={z_mu_all.mean():.4f}, std={z_mu_all.std():.4f}")
+if n_nan > 0 or n_inf > 0:
+    print("  WARNING: non-finite values in latent matrix — replacing with 0")
+    z_mu_all = np.nan_to_num(z_mu_all, nan=0.0, posinf=0.0, neginf=0.0)
+
+# PCA on latent encodings via covariance eigendecomposition. sklearn's
+# SVD-based solvers have repeatedly thrown LAPACK convergence errors on this
+# (497, 4) matrix — a hand-rolled eigendecomposition on the 4x4 covariance
+# matrix is trivially stable for this size.
+_zc = z_mu_all - z_mu_all.mean(axis=0, keepdims=True)
+_cov = (_zc.T @ _zc) / max(_zc.shape[0] - 1, 1)
+_evals, _evecs = np.linalg.eigh(_cov)  # ascending
+# Take the top 2 components (last 2 in ascending order), sign-flip if needed
+_order = np.argsort(_evals)[::-1][:2]
+_pc_axes = _evecs[:, _order]
+z_pca = _zc @ _pc_axes  # (N_windows, 2)
+print(f"  PCA explained variance ratio (top 2): "
+      f"{_evals[_order[0]] / _evals.sum():.3f}, "
+      f"{_evals[_order[1]] / _evals.sum():.3f}")
 
 # ---------------------------------------------------------------------------
 # Helper: map window midpoint dates to f_residual values
@@ -357,6 +396,7 @@ for i, row in serotype_df.iterrows():
 
 dominant_at_mid = []
 entropy_at_mid = np.full(N_windows, np.nan)
+n_unmatched = 0
 for w in range(N_windows):
     mid_period = pd.Timestamp(window_mid_dates[w]).to_period("M")
     if mid_period in sero_date_to_row:
@@ -364,9 +404,13 @@ for w in range(N_windows):
         dominant_at_mid.append(serotype_df.iloc[row_idx]["dominant"])
         entropy_at_mid[w] = serotype_df.iloc[row_idx]["entropy"]
     else:
-        dominant_at_mid.append("Unknown")
+        dominant_at_mid.append("Unmatched")
+        n_unmatched += 1
 
 dominant_at_mid = np.array(dominant_at_mid)
+if n_unmatched > 0:
+    print(f"  WARNING: {n_unmatched} windows had no matching serotype month — "
+          f"check analysis window alignment")
 
 # Year (fractional) for time coloring
 mid_dates_ts = pd.to_datetime(window_mid_dates)
@@ -398,11 +442,14 @@ axes[0, 1].set_xlabel("PC1")
 axes[0, 1].set_ylabel("PC2")
 plt.colorbar(sc_b, ax=axes[0, 1], label="f_residual median")
 
-# (c) Colored by dominant serotype
+# (c) Colored by dominant serotype.
+# Note: DENV-4 was never the argmax of GAM-smoothed proportions in Singapore
+# 2013-2022 (max smoothed ~23%), so no DENV-4 points appear on this panel.
+# This is a descriptive artefact of collapsing proportions to a single label,
+# not an absence of DENV-4 in circulation.
 serotype_colors = {"DENV-1": "#e41a1c", "DENV-2": "#377eb8",
-                   "DENV-3": "#4daf4a", "DENV-4": "#984ea3",
-                   "Unknown": "#999999"}
-for sero in ["DENV-1", "DENV-2", "DENV-3", "DENV-4", "Unknown"]:
+                   "DENV-3": "#4daf4a", "DENV-4": "#984ea3"}
+for sero in ["DENV-1", "DENV-2", "DENV-3", "DENV-4"]:
     mask_s = dominant_at_mid == sero
     if mask_s.sum() > 0:
         axes[1, 0].scatter(z_pca[mask_s, 0], z_pca[mask_s, 1],
@@ -411,7 +458,7 @@ for sero in ["DENV-1", "DENV-2", "DENV-3", "DENV-4", "Unknown"]:
 axes[1, 0].set_title("(c) Colored by dominant serotype")
 axes[1, 0].set_xlabel("PC1")
 axes[1, 0].set_ylabel("PC2")
-axes[1, 0].legend(fontsize=8, markerscale=2)
+axes[1, 0].legend(fontsize=8, markerscale=2, title="DENV-4: never dominant\n(max smoothed prop. 0.23)")
 
 # (d) Colored by Shannon entropy
 mask_d = ~np.isnan(entropy_at_mid)

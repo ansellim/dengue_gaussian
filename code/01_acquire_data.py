@@ -6,13 +6,12 @@ Download and process data for dengue Rt estimation:
 1. Weekly dengue case counts from data.gov.sg (MOH Weekly Infectious Diseases Bulletin)
 2. Meteorological data from Meteostat (Singapore Changi Airport)
 
-Output: data/raw_*.csv files ready for merging in 02_prepare_model_data.R
+Output: data/raw_*.csv files ready for merging in 03_prepare_model_data.R
 """
 
 import os
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime
 import requests
 import warnings
 
@@ -129,20 +128,16 @@ def process_dengue_data(df):
     print("\nProcessing dengue data...")
 
     if df is None:
-        print("  No data available. Using synthetic data for demonstration...")
-        return create_synthetic_dengue_data()
+        raise RuntimeError(
+            "Dengue data download failed. Please manually download from:\n"
+            "  https://data.gov.sg/datasets/d_ca168b2cb763640d72c4600a68f9909e/view\n"
+            "Save as: data/WeeklyInfectiousDiseaseBulletinCases.csv"
+        )
 
     # Print column names to understand structure
     print(f"  Columns: {df.columns.tolist()}")
 
-    # The dataset structure may vary - adapt accordingly
-    # Expected columns: epi_week, disease, no_of_cases
-
     # Filter for dengue cases (dengue fever + dengue haemorrhagic fever)
-    dengue_diseases = ['Dengue Fever', 'Dengue Haemorrhagic Fever',
-                       'dengue fever', 'dengue haemorrhagic fever',
-                       'DENGUE FEVER', 'DENGUE HAEMORRHAGIC FEVER']
-
     # Find the disease column
     disease_col = None
     for col in df.columns:
@@ -185,8 +180,10 @@ def process_dengue_data(df):
 
         return weekly[['date', 'cases']]
 
-    print("  Could not process data structure, creating synthetic data...")
-    return create_synthetic_dengue_data()
+    raise RuntimeError(
+        "Could not find expected columns in dengue data. "
+        f"Available columns: {df.columns.tolist()}"
+    )
 
 
 def parse_epi_week(epi_week):
@@ -218,69 +215,6 @@ def parse_epi_week(epi_week):
         return None
 
 
-def create_synthetic_dengue_data():
-    """
-    Create synthetic dengue data for testing when API is unavailable.
-    This generates plausible weekly case counts based on Singapore's historical patterns.
-    """
-    print("  Generating synthetic dengue data for testing...")
-
-    # Date range: 2012-01-01 to 2022-12-31
-    dates = pd.date_range(start='2012-01-01', end='2022-12-31', freq='W-SUN')
-
-    np.random.seed(42)
-    n = len(dates)
-
-    # Base seasonal pattern (peaks around May-July and Oct-Nov)
-    t = np.arange(n)
-    seasonal = 0.3 * np.sin(2 * np.pi * t / 52) + 0.2 * np.sin(4 * np.pi * t / 52)
-
-    # Multi-year epidemic cycles (major outbreaks in 2013, 2016, 2020)
-    epidemic_years = [2013, 2016, 2020]
-    epidemic = np.zeros(n)
-    for i, date in enumerate(dates):
-        if date.year in epidemic_years:
-            # Peak in middle of year
-            week_of_year = date.isocalendar()[1]
-            epidemic[i] = 0.8 * np.exp(-((week_of_year - 26) ** 2) / 200)
-
-    # Trend component
-    trend = -0.3 * (t / n)
-
-    # Combine components
-    log_rt = 0.1 + seasonal + epidemic + trend
-
-    # Generate cases using renewal-like process
-    cases = np.zeros(n)
-    cases[0:4] = np.random.poisson(300, 4)  # Initial cases
-
-    for i in range(4, n):
-        rt = np.exp(log_rt[i])
-        # Simplified renewal: cases depend on previous 4 weeks
-        infectious_pressure = np.sum(cases[max(0, i-4):i] * np.array([0.1, 0.3, 0.4, 0.2][-min(4, i):]))
-        expected = rt * infectious_pressure
-        # Negative binomial with overdispersion
-        if expected > 0:
-            p = 5 / (5 + expected)  # overdispersion parameter = 5
-            cases[i] = np.random.negative_binomial(5, p)
-        else:
-            cases[i] = 0
-
-    # Scale to realistic Singapore numbers (typically 100-2000+ per week)
-    cases = (cases * 2 + 100).astype(int)
-    cases = np.clip(cases, 50, 5000)
-
-    df = pd.DataFrame({
-        'date': dates,
-        'cases': cases
-    })
-
-    print(f"  Generated {len(df)} weeks of synthetic data")
-    print(f"  Date range: {df['date'].min()} to {df['date'].max()}")
-    print(f"  Case range: {df['cases'].min()} to {df['cases'].max()}")
-
-    return df
-
 
 # =============================================================================
 # 2. METEOROLOGICAL DATA FROM METEOSTAT
@@ -306,8 +240,7 @@ def download_weather_data():
         end = datetime(2022, 12, 31)
 
         # Get daily data
-        data = Daily(singapore, start, end)
-        df = data.fetch()
+        df = Daily(singapore, start, end).fetch()
 
         if len(df) > 0:
             print(f"  Downloaded {len(df)} daily records")
@@ -321,54 +254,10 @@ def download_weather_data():
     except Exception as e:
         print(f"  Error downloading from Meteostat: {e}")
 
-    # Fallback: create synthetic weather data
-    return create_synthetic_weather_data()
+    raise RuntimeError(
+        "Weather data download failed. Install meteostat (pip install meteostat) and retry."
+    )
 
-
-def create_synthetic_weather_data():
-    """
-    Create synthetic weather data for Singapore when Meteostat is unavailable.
-    Based on typical Singapore climate patterns.
-    """
-    print("  Generating synthetic weather data...")
-
-    # Date range
-    dates = pd.date_range(start='2012-01-01', end='2022-12-31', freq='D')
-    n = len(dates)
-
-    np.random.seed(43)
-
-    # Temperature: Singapore is tropical, relatively constant (26-32°C)
-    # Slight variation with monsoon seasons
-    day_of_year = np.array([d.timetuple().tm_yday for d in dates])
-
-    # Base temperature with small seasonal variation
-    temp_base = 27.5 + 1.5 * np.sin(2 * np.pi * (day_of_year - 90) / 365)
-    temp_noise = np.random.normal(0, 1.5, n)
-    temperature = temp_base + temp_noise
-
-    # Rainfall: Higher during monsoon seasons (Nov-Jan NE monsoon, Jun-Sep SW monsoon)
-    # Singapore average ~2400mm/year
-    rainfall_seasonal = 8 + 4 * np.sin(2 * np.pi * (day_of_year - 330) / 365)  # NE monsoon peak
-    rainfall_seasonal += 2 * np.sin(2 * np.pi * (day_of_year - 200) / 365)  # SW monsoon
-
-    # Rainfall is highly variable day-to-day
-    # Use gamma distribution for daily rainfall
-    rainfall_prob = 0.5 + 0.2 * np.sin(2 * np.pi * (day_of_year - 330) / 365)
-    rain_occurs = np.random.binomial(1, rainfall_prob, n)
-    rain_amount = np.random.gamma(2, 5, n) * rain_occurs
-
-    df = pd.DataFrame({
-        'time': dates,
-        'tavg': temperature,
-        'prcp': rain_amount
-    })
-
-    print(f"  Generated {len(df)} daily records")
-    print(f"  Temperature range: {df['tavg'].min():.1f} to {df['tavg'].max():.1f}°C")
-    print(f"  Annual rainfall: ~{df['prcp'].sum() / 11:.0f}mm")
-
-    return df
 
 
 def process_weather_data(df):
@@ -421,4 +310,4 @@ if __name__ == "__main__":
     print("\n" + "=" * 70)
     print("DATA ACQUISITION COMPLETE")
     print("=" * 70)
-    print("\nNext step: Run 02_prepare_model_data.R to merge and format data for Stan")
+    print("\nNext step: Run 03_prepare_model_data.R to merge and format data for Stan")

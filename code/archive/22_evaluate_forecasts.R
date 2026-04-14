@@ -499,7 +499,247 @@ if (nrow(paired_df) > 0) {
 }
 
 # ==============================================================================
-# 9. FINAL SUMMARY
+# 9. SKILL VS BASELINES (slide-ready figures)
+# ==============================================================================
+#
+# Two slide-ready figures focused on showing that the GP has no forecast skill:
+#   (a) forecast_crps_vs_baselines.png -- GP CRPS vs random-walk and Rt=1
+#       baselines at each horizon, with GP/RW ratio annotations.
+#   (b) forecast_rt_meanreversion.png -- forecast Rt median + credible bands
+#       per origin, illustrating collapse to the prior mean within ~rho weeks.
+# ==============================================================================
+
+summary_no_entropy <- read_csv("../results/forecast_evaluation_summary.csv",
+                               show_col_types = FALSE) |>
+  filter(use_entropy == 0)
+
+baselines_df <- summary_no_entropy |>
+  select(horizon,
+         GP = mean_crps,
+         `Random walk` = mean_crps_baseline_rw,
+         `Rt = 1` = mean_crps_baseline_rt1) |>
+  pivot_longer(-horizon, names_to = "method", values_to = "crps") |>
+  mutate(
+    method = factor(method, levels = c("GP", "Random walk", "Rt = 1")),
+    horizon_lab = factor(paste0(horizon, " wk"),
+                         levels = c("4 wk", "8 wk", "13 wk"))
+  )
+
+ratio_df <- summary_no_entropy |>
+  transmute(
+    horizon_lab = factor(paste0(horizon, " wk"),
+                         levels = c("4 wk", "8 wk", "13 wk")),
+    label = sprintf("GP/RW = %.1fx", mean_crps / mean_crps_baseline_rw),
+    crps = mean_crps
+  )
+
+p_baselines <- ggplot(baselines_df, aes(x = horizon_lab, y = crps, fill = method)) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  geom_text(data = ratio_df,
+            aes(x = horizon_lab, y = crps, label = label),
+            inherit.aes = FALSE,
+            vjust = -0.4, size = 4, color = "firebrick", fontface = "bold") +
+  scale_fill_manual(values = c("GP" = "firebrick",
+                                "Random walk" = "steelblue",
+                                "Rt = 1" = "gray60")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.18))) +
+  labs(
+    title = "GP forecast loses to random-walk baseline at every horizon",
+    subtitle = "Mean CRPS over 4 rolling forecast origins (Jul 4 - Sep 26, 2022). Lower is better.",
+    x = "Forecast horizon",
+    y = "Mean CRPS (cases)",
+    fill = NULL,
+    caption = "GP/RW > 1 means GP is worse than persistence baseline."
+  ) +
+  theme(legend.position = "top",
+        panel.grid.major.x = element_blank(),
+        panel.grid.minor = element_blank())
+
+ggsave("../results/figures/forecast_crps_vs_baselines.png", p_baselines,
+       width = 8, height = 5.5, dpi = 150)
+cat("  Saved: results/figures/forecast_crps_vs_baselines.png\n")
+
+# Mean-reversion figure: extract forecast-horizon Rt draws per origin
+extract_rt_forecast <- function(path) {
+  fc <- readRDS(path)
+  N_train <- fc$N_train
+  N_model <- fc$N_model
+  rt_draws <- fc$Rt[, (N_train + 1):N_model]
+  tibble(
+    origin = format(fc$dates_model[N_train + 1], "%Y-%m-%d"),
+    horizon_week = seq_len(N_model - N_train),
+    median = apply(rt_draws, 2, median),
+    lo80 = apply(rt_draws, 2, quantile, 0.10),
+    hi80 = apply(rt_draws, 2, quantile, 0.90),
+    lo50 = apply(rt_draws, 2, quantile, 0.25),
+    hi50 = apply(rt_draws, 2, quantile, 0.75)
+  )
+}
+
+rt_forecast_files <- list.files("../results/forecasts",
+                                pattern = "^forecast_entropy0_origin[0-9]+\\.rds$",
+                                full.names = TRUE)
+rt_df <- map_dfr(rt_forecast_files, extract_rt_forecast) |>
+  mutate(origin = factor(origin, levels = sort(unique(origin))))
+
+p_meanrev <- ggplot(rt_df, aes(x = horizon_week)) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "gray40") +
+  geom_ribbon(aes(ymin = lo80, ymax = hi80, fill = origin), alpha = 0.18) +
+  geom_ribbon(aes(ymin = lo50, ymax = hi50, fill = origin), alpha = 0.30) +
+  geom_line(aes(y = median, color = origin), linewidth = 0.9) +
+  geom_vline(xintercept = 3, linetype = "dotted", color = "firebrick") +
+  annotate("text", x = 3.3, y = 1.55, label = "GP length scale\nrho ~ 3 wk",
+           hjust = 0, size = 3.4, color = "firebrick") +
+  scale_x_continuous(breaks = seq(0, 25, by = 5)) +
+  scale_color_brewer(palette = "Dark2") +
+  scale_fill_brewer(palette = "Dark2") +
+  labs(
+    title = expression("Forecast" ~ R[t] ~ "collapses to prior mean within ~3 weeks"),
+    subtitle = "Posterior median + 50% / 80% credible bands, by forecast origin",
+    x = "Forecast horizon (weeks ahead)",
+    y = expression("Forecast" ~ R[t]),
+    color = "Origin", fill = "Origin",
+    caption = expression("Dashed line:" ~ R[t] == 1 ~ "(prior mean). Dotted red line: estimated GP length scale.")
+  ) +
+  theme(legend.position = "right",
+        panel.grid.minor = element_blank())
+
+ggsave("../results/figures/forecast_rt_meanreversion.png", p_meanrev,
+       width = 8, height = 5, dpi = 150)
+cat("  Saved: results/figures/forecast_rt_meanreversion.png\n")
+
+# --- Rolling-origin design schematic (overview + zoom) ---
+library(patchwork)
+
+origins_df <- map_dfr(rt_forecast_files, function(p) {
+  fc <- readRDS(p)
+  tibble(
+    N_train = fc$N_train,
+    N_model = fc$N_model,
+    series_start = fc$dates_model[1],
+    origin_date = fc$dates_model[fc$N_train],
+    series_end = fc$dates_model[fc$N_model]
+  )
+}) |> arrange(N_train)
+
+series_start <- min(origins_df$series_start)
+series_end <- max(origins_df$series_end)
+holdout_start <- series_end - 7 * 26
+
+origins_df <- origins_df |>
+  mutate(
+    row = factor(seq_len(n()),
+                 levels = rev(seq_len(n())),
+                 labels = rev(sprintf("Origin %d (%s)", seq_len(n()),
+                                      format(origin_date, "%b %d")))),
+    h4_end  = origin_date + 7 * 4,
+    h8_end  = origin_date + 7 * 8,
+    h13_end = origin_date + 7 * 13
+  )
+
+p_overview <- ggplot(tibble(start = series_start, hs = holdout_start, end = series_end)) +
+  geom_segment(aes(x = start, xend = hs, y = 1, yend = 1),
+               linewidth = 8, color = "gray70") +
+  geom_segment(aes(x = hs, xend = end, y = 1, yend = 1),
+               linewidth = 8, color = "#fdae61") +
+  annotate("text", x = series_start + 365, y = 1.45,
+           label = "Training data (2012-2022)", hjust = 0, size = 3.5) +
+  annotate("text", x = holdout_start - 60, y = 1.45,
+           label = "26-week\nholdout", hjust = 1, size = 3.2, color = "#b8540a") +
+  annotate("segment", x = holdout_start, xend = holdout_start,
+           y = 1.2, yend = 0.8, color = "gray30", linewidth = 0.4) +
+  scale_x_date(date_breaks = "1 year", date_labels = "%Y",
+               limits = c(series_start, series_end + 30)) +
+  scale_y_continuous(limits = c(0.3, 1.7)) +
+  labs(title = "Full series: 11 years of Singapore weekly dengue (2012-2022)",
+       x = NULL, y = NULL) +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_blank(),
+        axis.text.y = element_blank(),
+        plot.title = element_text(size = 11))
+
+zoom_start <- as.Date("2022-06-15")
+zoom_end <- series_end + 7
+
+p_zoom <- ggplot(origins_df) +
+  geom_segment(aes(x = zoom_start, xend = origin_date, y = row, yend = row),
+               linewidth = 6, color = "gray70") +
+  geom_segment(aes(x = origin_date, xend = h13_end, y = row, yend = row),
+               linewidth = 6, color = "#fbb4ae") +
+  geom_segment(aes(x = origin_date, xend = h8_end, y = row, yend = row),
+               linewidth = 6, color = "#b3cde3") +
+  geom_segment(aes(x = origin_date, xend = h4_end, y = row, yend = row),
+               linewidth = 6, color = "#ccebc5") +
+  geom_point(aes(x = origin_date, y = row),
+             shape = 23, size = 4, fill = "firebrick", color = "firebrick") +
+  scale_x_date(date_breaks = "1 month", date_labels = "%b",
+               limits = c(zoom_start, zoom_end)) +
+  labs(title = "Zoom: 4 rolling origins, each forecasting 4 / 8 / 13 weeks ahead",
+       x = "2022", y = NULL,
+       caption = "Gray = training | green / blue / pink = h = 4 / 8 / 13 wk forecast windows | red diamond = forecast origin (refit point)") +
+  theme(panel.grid.minor = element_blank(),
+        panel.grid.major.y = element_blank(),
+        plot.title = element_text(size = 11),
+        plot.caption = element_text(size = 8.5, hjust = 0))
+
+p_design <- p_overview / p_zoom + plot_layout(heights = c(1, 3))
+ggsave("../results/figures/forecast_rolling_origin_design.png", p_design,
+       width = 10, height = 5, dpi = 150)
+cat("  Saved: results/figures/forecast_rolling_origin_design.png\n")
+
+# --- CRPS concept figure (uses one real forecast point) ---
+fc_concept <- readRDS("../results/forecasts/forecast_entropy0_origin549.rds")
+target_idx <- fc_concept$N_train + 4
+draws <- as.numeric(fc_concept$cases_forward[, target_idx])
+y_obs_concept <- fc_concept$obs_cases_forecast[4]
+
+cdf_df <- tibble(x = sort(draws), F = seq_along(draws) / length(draws))
+ind_df <- tibble(
+  x = c(min(cdf_df$x), y_obs_concept, y_obs_concept, max(cdf_df$x)),
+  F = c(0, 0, 1, 1)
+)
+xs <- sort(unique(c(cdf_df$x, y_obs_concept)))
+shade_df <- tibble(
+  x = xs,
+  F_pred = approx(cdf_df$x, cdf_df$F, xout = xs, rule = 2)$y,
+  F_obs = ifelse(xs < y_obs_concept, 0, 1)
+) |>
+  mutate(ymin = pmin(F_pred, F_obs), ymax = pmax(F_pred, F_obs))
+
+crps_value <- mean(abs(draws - y_obs_concept)) -
+              0.5 * mean(abs(outer(draws, draws, "-")))
+
+p_crps <- ggplot() +
+  geom_ribbon(data = shade_df, aes(x = x, ymin = ymin, ymax = ymax),
+              fill = "firebrick", alpha = 0.25) +
+  geom_step(data = ind_df, aes(x = x, y = F),
+            color = "black", linewidth = 1.0) +
+  geom_line(data = cdf_df, aes(x = x, y = F),
+            color = "steelblue", linewidth = 1.0) +
+  geom_vline(xintercept = y_obs_concept, linetype = "dashed",
+             color = "black", alpha = 0.6) +
+  annotate("text", x = y_obs_concept + 50, y = 0.05,
+           label = sprintf("y_obs = %d", y_obs_concept), hjust = 0, size = 3.5) +
+  annotate("text", x = quantile(draws, 0.85), y = 0.50,
+           label = sprintf("CRPS\n= %.0f cases", crps_value),
+           color = "firebrick", hjust = 0.5, size = 4, fontface = "bold") +
+  annotate("text", x = quantile(draws, 0.05), y = 0.95,
+           label = "Predictive CDF", hjust = 0, size = 3.3, color = "steelblue") +
+  annotate("text", x = y_obs_concept - 100, y = 0.55,
+           label = "Observation\nstep", hjust = 1, size = 3.3) +
+  scale_y_continuous(limits = c(0, 1.05), expand = c(0, 0)) +
+  scale_x_continuous(labels = scales::comma) +
+  labs(title = "What CRPS measures",
+       subtitle = "Shaded area between predictive CDF and observation step (origin Jul 04, h = 4 wk)",
+       x = "Cases", y = "Cumulative probability") +
+  theme(panel.grid.minor = element_blank())
+
+ggsave("../results/figures/forecast_crps_concept.png", p_crps,
+       width = 6, height = 5, dpi = 150)
+cat("  Saved: results/figures/forecast_crps_concept.png\n")
+
+# ==============================================================================
+# 10. FINAL SUMMARY
 # ==============================================================================
 
 cat("\n")
@@ -512,6 +752,10 @@ cat("  results/figures/kernel_forecast_crps.png\n")
 cat("  results/figures/kernel_forecast_calibration.png\n")
 cat("  results/figures/kernel_forecast_trajectories.png\n")
 cat("  results/figures/kernel_forecast_entropy_effect.png\n")
+cat("  results/figures/forecast_crps_vs_baselines.png\n")
+cat("  results/figures/forecast_rt_meanreversion.png\n")
+cat("  results/figures/forecast_rolling_origin_design.png\n")
+cat("  results/figures/forecast_crps_concept.png\n")
 cat("\nTables saved:\n")
 cat("  results/forecast_evaluation_summary.csv\n")
 cat("  results/forecast_evaluation_detail.csv\n")

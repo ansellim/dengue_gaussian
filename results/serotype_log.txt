@@ -1,16 +1,16 @@
 ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
-✔ dplyr     1.2.0     ✔ readr     2.2.0
-✔ forcats   1.0.1     ✔ stringr   1.6.0
-✔ ggplot2   4.0.2     ✔ tibble    3.3.1
-✔ lubridate 1.9.5     ✔ tidyr     1.3.2
-✔ purrr     1.2.1     
+✔ dplyr     1.1.4     ✔ readr     2.1.5
+✔ forcats   1.0.1     ✔ stringr   1.5.2
+✔ ggplot2   4.0.0     ✔ tibble    3.3.0
+✔ lubridate 1.9.4     ✔ tidyr     1.3.1
+✔ purrr     1.1.0     
 ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
 ✖ dplyr::filter() masks stats::filter()
 ✖ dplyr::lag()    masks stats::lag()
 ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
 This is cmdstanr version 0.8.0
 - CmdStanR documentation and vignettes: mc-stan.org/cmdstanr
-- CmdStan path: /mnt/b1/ansellim/.cmdstan/cmdstan-2.38.0
+- CmdStan path: /home/ansel/.cmdstan/cmdstan-2.38.0
 - CmdStan version: 2.38.0
 This is posterior version 1.6.1
 
@@ -38,8 +38,8 @@ POST-HOC SEROTYPE ANALYSIS
 ====================================================================== 
 
 Loading model fit and data...
-  Using Model 3 (climate-only) fit
-  4000 posterior draws, 574 modeled weeks
+  Using climate-only model fit
+  4000 posterior draws, 562 modeled weeks
   Date range: 2012-03-12 to 2022-12-26
 
 Aggregating f_residual to monthly resolution...
@@ -73,6 +73,8 @@ Generating panel plot...
   Saved: results/figures/serotype_panel.png
 
 Generating temporal profiles around serotype switches...
+  Saved: results/figures/serotype_switch_profiles_part1.png
+  Saved: results/figures/serotype_switch_profiles_part2.png
   Saved: results/figures/serotype_switch_profiles.png
 
 ====================================================================== 
@@ -82,25 +84,32 @@ CROSS-CORRELATION ANALYSIS
   Saved: results/serotype_ccf_results.csv
 
 Cross-correlation: f_residual vs Shannon entropy:
-  (Positive lag = Rt leads entropy; Negative lag = entropy leads Rt)
-  Lag  -6 months: r = -0.055  (entropy leads Rt)
-  Lag  -3 months: r = -0.104  (entropy leads Rt)
-  Lag  -1 months: r = -0.088  (entropy leads Rt)
-  Lag  +0 months: r = -0.075
-  Lag  +1 months: r = -0.072
-  Lag  +3 months: r = -0.061
-  Lag  +6 months: r = -0.035
+  (Positive lag = entropy leads Rt; Negative lag = Rt leads entropy)
+  Lag  -6 months: r = -0.053
+  Lag  -3 months: r = -0.099
+  Lag  -1 months: r = -0.082
+  Lag  +0 months: r = -0.069
+  Lag  +1 months: r = -0.066  (entropy leads Rt)
+  Lag  +3 months: r = -0.056  (entropy leads Rt)
+  Lag  +6 months: r = -0.033  (entropy leads Rt)
+  Lag +10 months: r = +0.083  (entropy leads Rt)
+  Lag +11 months: r = +0.098  (entropy leads Rt)
+  Lag +12 months: r = +0.105  (entropy leads Rt)
 
 Cross-correlation: f_residual vs serotype turnover rate:
-  Lag  -6 months: r = -0.039  (turnover leads Rt)
-  Lag  -3 months: r = -0.105  (turnover leads Rt)
-  Lag  -1 months: r = -0.049  (turnover leads Rt)
-  Lag  +0 months: r = -0.029
-  Lag  +1 months: r = -0.070
-  Lag  +3 months: r = -0.125
-  Lag  +6 months: r = +0.012
+  (Positive lag = turnover leads Rt; Negative lag = Rt leads turnover)
+  Lag  -6 months: r = -0.038
+  Lag  -3 months: r = -0.099
+  Lag  -1 months: r = -0.049
+  Lag  +0 months: r = -0.032
+  Lag  +1 months: r = -0.071  (turnover leads Rt)
+  Lag  +3 months: r = -0.122  (turnover leads Rt)
+  Lag  +6 months: r = +0.007  (turnover leads Rt)
+  Lag +10 months: r = +0.103  (turnover leads Rt)
+  Lag +11 months: r = +0.083  (turnover leads Rt)
+  Lag +12 months: r = -0.038  (turnover leads Rt)
 
-Peak |CCF| with entropy at lag -3 months
+Peak |CCF| with entropy at lag +12 months
 Peak |CCF| with turnover rate at lag +8 months
   Saved: results/figures/serotype_ccf.png
 
@@ -112,7 +121,7 @@ PRE-SWITCH Rt DYNAMICS
     P(f_residual rising before switch) = 100.0%
     Lead time (median > 0): 12 months
   DENV-1 -> DENV-2 (Nov 2015):
-    P(f_residual rising before switch) = 0.1%
+    P(f_residual rising before switch) = 0.0%
     Lead time (median > 0): 11 months
   DENV-2 -> DENV-1 (Sep 2016):
     P(f_residual rising before switch) = 100.0%
@@ -124,11 +133,11 @@ PRE-SWITCH Rt DYNAMICS
     P(f_residual rising before switch) = 100.0%
     Lead time (median > 0): 10 months
   DENV-3 -> DENV-2 (Jun 2020):
-    P(f_residual rising before switch) = 75.2%
+    P(f_residual rising before switch) = 69.0%
     Lead time (median > 0): 12 months
   DENV-2 -> DENV-3 (Mar 2021):
-    P(f_residual rising before switch) = 94.5%
-    Lead time (median > 0): 10 months
+    P(f_residual rising before switch) = 94.9%
+    Lead time (median > 0): 11 months
 
   Saved: results/serotype_switch_timing.csv
 
@@ -137,33 +146,33 @@ POST-SWITCH Rt DYNAMICS
 ====================================================================== 
 
   DENV-2 -> DENV-1 (Mar 2013):
-    P(Rt elevated 0-3m post-switch vs baseline) = 100.0%
-    Median change in f_residual (0-3m): +0.203
-    P(Rt elevated 3-6m post-switch vs baseline) = 3.8%
+    P(Rt elevated 0-3m post-switch vs baseline) = 99.8%
+    Median change in f_residual (0-3m): +0.190
+    P(Rt elevated 3-6m post-switch vs baseline) = 6.5%
   DENV-1 -> DENV-2 (Nov 2015):
-    P(Rt elevated 0-3m post-switch vs baseline) = 88.9%
-    Median change in f_residual (0-3m): +0.074
+    P(Rt elevated 0-3m post-switch vs baseline) = 83.0%
+    Median change in f_residual (0-3m): +0.064
     P(Rt elevated 3-6m post-switch vs baseline) = 0.0%
   DENV-2 -> DENV-1 (Sep 2016):
-    P(Rt elevated 0-3m post-switch vs baseline) = 25.2%
-    Median change in f_residual (0-3m): -0.041
-    P(Rt elevated 3-6m post-switch vs baseline) = 90.5%
+    P(Rt elevated 0-3m post-switch vs baseline) = 26.4%
+    Median change in f_residual (0-3m): -0.044
+    P(Rt elevated 3-6m post-switch vs baseline) = 85.0%
   DENV-1 -> DENV-2 (Dec 2016):
-    P(Rt elevated 0-3m post-switch vs baseline) = 0.2%
+    P(Rt elevated 0-3m post-switch vs baseline) = 0.3%
     Median change in f_residual (0-3m): -0.212
-    P(Rt elevated 3-6m post-switch vs baseline) = 15.4%
+    P(Rt elevated 3-6m post-switch vs baseline) = 19.5%
   DENV-2 -> DENV-3 (Feb 2020):
     P(Rt elevated 0-3m post-switch vs baseline) = 100.0%
-    Median change in f_residual (0-3m): +0.239
+    Median change in f_residual (0-3m): +0.233
     P(Rt elevated 3-6m post-switch vs baseline) = 100.0%
   DENV-3 -> DENV-2 (Jun 2020):
-    P(Rt elevated 0-3m post-switch vs baseline) = 99.9%
-    Median change in f_residual (0-3m): +0.169
+    P(Rt elevated 0-3m post-switch vs baseline) = 99.5%
+    Median change in f_residual (0-3m): +0.166
     P(Rt elevated 3-6m post-switch vs baseline) = 0.0%
   DENV-2 -> DENV-3 (Mar 2021):
     P(Rt elevated 0-3m post-switch vs baseline) = 100.0%
     Median change in f_residual (0-3m): +0.314
-    P(Rt elevated 3-6m post-switch vs baseline) = 99.8%
+    P(Rt elevated 3-6m post-switch vs baseline) = 99.7%
 
   Saved: results/serotype_post_switch_dynamics.csv
 
@@ -182,31 +191,31 @@ COMBINED Rt + ENTROPY OVERLAY
 --- TEMPORAL RELATIONSHIP ASSESSMENT ---
 
   DENV-2 -> DENV-1 (Mar 2013):
-    f_residual: FALLS after switch (pre=0.361, post=0.033)
+    f_residual: FALLS after switch (pre=0.385, post=0.035)
     Entropy: FALLS after switch (pre=1.120, post=0.920)
 
   DENV-1 -> DENV-2 (Nov 2015):
-    f_residual: FALLS after switch (pre=0.083, post=-0.016)
+    f_residual: FALLS after switch (pre=0.087, post=-0.017)
     Entropy: RISES after switch (pre=0.956, post=1.028)
 
   DENV-2 -> DENV-1 (Sep 2016):
-    f_residual: FALLS after switch (pre=-0.092, post=-0.223)
+    f_residual: FALLS after switch (pre=-0.089, post=-0.222)
     Entropy: RISES after switch (pre=1.103, post=1.159)
 
   DENV-1 -> DENV-2 (Dec 2016):
-    f_residual: RISES after switch (pre=-0.113, post=-0.030)
+    f_residual: RISES after switch (pre=-0.111, post=-0.032)
     Entropy: FALLS after switch (pre=1.172, post=1.134)
 
   DENV-2 -> DENV-3 (Feb 2020):
-    f_residual: RISES after switch (pre=-0.072, post=0.150)
+    f_residual: RISES after switch (pre=-0.070, post=0.146)
     Entropy: RISES after switch (pre=1.058, post=1.121)
 
   DENV-3 -> DENV-2 (Jun 2020):
-    f_residual: FALLS after switch (pre=0.065, post=-0.239)
+    f_residual: FALLS after switch (pre=0.064, post=-0.240)
     Entropy: FALLS after switch (pre=1.156, post=1.058)
 
   DENV-2 -> DENV-3 (Mar 2021):
-    f_residual: RISES after switch (pre=-0.326, post=-0.062)
+    f_residual: RISES after switch (pre=-0.324, post=-0.060)
     Entropy: FALLS after switch (pre=1.061, post=0.825)
 
 

@@ -28,7 +28,7 @@ if (interactive() && requireNamespace("rstudioapi", quietly = TRUE)) {
     dirname())
 }
 
-dir.create("../results/figures", showWarnings = FALSE, recursive = TRUE)
+dir.create("../../results/figures", showWarnings = FALSE, recursive = TRUE)
 
 theme_set(theme_minimal(base_size = 12) +
             theme(panel.grid.minor = element_blank()))
@@ -43,11 +43,11 @@ cat("=" |> rep(70) |> paste(collapse = ""), "\n\n")
 
 cat("Loading data and model fit...\n")
 
-model_data <- readRDS("../data/model_data.rds")
+model_data <- readRDS("../../data/model_data.rds")
 dates <- model_data$metadata$dates_model
 N_model <- length(dates)
 
-fit <- readRDS("../results/fit_model3.rds")
+fit <- readRDS("../../results/fit_model.rds")
 cat(sprintf("  %d modeled weeks, %s to %s\n", N_model, min(dates), max(dates)))
 
 # ==============================================================================
@@ -156,6 +156,24 @@ if (length(dominant_periods) == 0 && length(peak_idx) > 0) {
   dominant_periods <- top_idx[1:min(3, length(top_idx))]
 }
 
+# Thin to top 4 peaks by power, with minimum log-period separation so
+# near-duplicate labels do not overlap on the plot.
+if (length(dominant_periods) > 0) {
+  ordered_idx <- dominant_periods[order(spec_median$power[dominant_periods],
+                                         decreasing = TRUE)]
+  min_log_sep <- 0.18  # ~factor 1.5 in period
+  kept <- integer(0)
+  for (idx in ordered_idx) {
+    p_new <- spec_median$period[idx]
+    if (length(kept) == 0 ||
+        all(abs(log10(spec_median$period[kept]) - log10(p_new)) >= min_log_sep)) {
+      kept <- c(kept, idx)
+    }
+    if (length(kept) >= 4) break
+  }
+  dominant_periods <- kept
+}
+
 cat(sprintf("  Median spectral power: %.4e\n", median_power))
 cat(sprintf("  Peaks above 2x median power: %d\n", length(peak_idx)))
 
@@ -172,14 +190,28 @@ if (length(dominant_periods) > 0) {
   cat("  No dominant peaks found above 2x median power\n")
 }
 
-# Reference periods
+# Theoretical reference periods (climate cycles + multi-strain SIR theory)
 ref_periods <- tibble(
-  period = c(52, 104, 156),
-  label = c("1 year\n(52 wk)", "2 years\n(104 wk)", "3 years\n(156 wk)")
+  period = c(26, 52, 104, 191),
+  short  = c("26 wk", "52 wk", "104 wk", "191 wk"),
+  long   = c("biannual\nmonsoon", "annual",
+             "2 yr\nserotype", "3.7 yr\n4-serotype"),
+  color  = c("#1b9e77", "#1b9e77", "#d95f02", "#d95f02")
 )
 
 # ==============================================================================
 # 6. FIGURE 1: SPECTRAL PERIODOGRAM
+# ==============================================================================
+#
+# Design notes:
+#   - Y-axis is log-scale but clipped to ~3 decades around the peaks. The
+#     uncliped CI ribbon at short periods spans 6+ decades and visually drowns
+#     the actual peaks at 26/52/80 wk; clipping keeps the peaks dominant.
+#   - X-axis starts at 8 wk (the GP cannot resolve below ~6 wk anyway).
+#   - Empirical peaks (red) are detected in period >= 20 wk to avoid noisy
+#     short-period bumps.
+#   - Theoretical reference periods are overlaid as dashed vertical lines so
+#     the reader can compare empirical peaks to predicted timescales.
 # ==============================================================================
 
 cat("\nGenerating spectral periodogram plot...\n")
@@ -187,56 +219,95 @@ cat("\nGenerating spectral periodogram plot...\n")
 spec_df <- tibble(
   period = spec_median$period,
   power = spec_median$power,
-  power_lower = spec_lower,
-  power_upper = spec_upper
+  power_lower = pmax(spec_lower, 1e-5),  # clip CI to plot area
+  power_upper = pmin(spec_upper, 5e-2)
 ) |>
-  filter(period >= 4, period <= 260)
+  filter(period >= 8, period <= 260) |>
+  arrange(period)
 
-p_periodogram <- ggplot(spec_df, aes(x = period)) +
-  geom_ribbon(aes(ymin = power_lower, ymax = power_upper),
-              fill = "steelblue", alpha = 0.3) +
-  geom_line(aes(y = power), color = "steelblue", linewidth = 0.8) +
-  geom_vline(data = ref_periods, aes(xintercept = period),
-             linetype = "dashed", color = "gray40", linewidth = 0.5) +
-  geom_text(data = ref_periods, aes(x = period, y = max(spec_df$power) * 0.85,
-                                     label = label),
-            hjust = -0.1, size = 3, color = "gray30") +
-  scale_x_log10(
-    breaks = c(4, 8, 13, 26, 52, 104, 156, 260),
-    labels = c("4", "8", "13", "26", "52", "104", "156", "260"),
-    limits = c(4, 260)
-  ) +
-  scale_y_log10() +
-  annotation_logticks(sides = "lb") +
-  labs(
-    title = "Power Spectrum of GP Residual (f_residual)",
-    subtitle = "Hanning-windowed FFT with 95% posterior credible interval",
-    x = "Period (weeks, log scale)",
-    y = "Spectral density (log scale)"
-  )
-
-# Annotate dominant peaks if they exist
-if (length(dominant_periods) > 0) {
-  peak_df <- tibble(
-    period = spec_median$period[dominant_periods],
-    power = spec_median$power[dominant_periods]
-  ) |>
-    filter(period >= 4, period <= 260)
-
-  if (nrow(peak_df) > 0) {
-    peak_df <- peak_df |>
-      mutate(label = sprintf("%.0f wk", period))
-
-    p_periodogram <- p_periodogram +
-      geom_point(data = peak_df, aes(x = period, y = power),
-                 color = "red", size = 3) +
-      geom_text(data = peak_df, aes(x = period, y = power, label = label),
-                vjust = -1, color = "red", size = 3.5, fontface = "bold")
+# Empirical peak detection (period >= 20 wk only).
+# Use a wider local-maximum window (+/- 3 bins) so wiggly long-period peaks
+# such as the ~187 wk 4-serotype-rotation peak are not missed by a strict
+# 1-bin neighborhood check.
+bg <- median(spec_df$power)
+peak_search <- spec_df |> filter(period >= 20)
+n_ps <- nrow(peak_search)
+win <- 3L
+is_peak <- logical(n_ps)
+for (i in seq_len(n_ps)) {
+  if (peak_search$power[i] <= 2 * bg) next
+  lo <- max(1L, i - win)
+  hi <- min(n_ps, i + win)
+  if (peak_search$power[i] >= max(peak_search$power[lo:hi])) {
+    is_peak[i] <- TRUE
   }
 }
+peaks_all <- peak_search[is_peak, ] |> arrange(desc(power))
+keep <- integer(0)
+for (j in seq_len(nrow(peaks_all))) {
+  pj <- peaks_all$period[j]
+  if (length(keep) == 0 ||
+      all(abs(log10(peaks_all$period[keep]) - log10(pj)) >= 0.18)) {
+    keep <- c(keep, j)
+  }
+  if (length(keep) >= 4) break
+}
+peak_df <- peaks_all[keep, ] |>
+  mutate(label = sprintf("%.0f wk", round(period)))
+cat("Empirical peaks shown on figure:\n")
+print(peak_df |> select(period, power, label))
 
-ggsave("../results/figures/spectral_periodogram.png", p_periodogram,
-       width = 10, height = 6, dpi = 150)
+ymin_clip <- 5e-5
+ymax_clip <- 3e-2
+
+p_periodogram <- ggplot(spec_df, aes(x = period)) +
+  geom_vline(data = ref_periods, aes(xintercept = period, color = color),
+             linetype = "dashed", linewidth = 0.5, alpha = 0.6,
+             show.legend = FALSE) +
+  geom_hline(yintercept = bg, color = "gray60", linetype = "dotted") +
+  geom_hline(yintercept = 2 * bg, color = "gray70", linetype = "dotted") +
+  geom_ribbon(aes(ymin = power_lower, ymax = power_upper),
+              fill = "steelblue", alpha = 0.18) +
+  geom_line(aes(y = power), color = "steelblue", linewidth = 0.9) +
+  geom_point(data = peak_df, aes(x = period, y = power),
+             color = "firebrick", size = 3) +
+  geom_text(data = peak_df,
+            aes(x = period, y = power, label = label),
+            vjust = -1.0, color = "firebrick", size = 4, fontface = "bold") +
+  geom_text(data = ref_periods,
+            aes(x = period, y = ymax_clip * 0.85, label = short, color = color),
+            hjust = -0.1, vjust = 1, size = 3.2, fontface = "bold",
+            show.legend = FALSE) +
+  geom_text(data = ref_periods,
+            aes(x = period, y = ymax_clip * 0.55, label = long, color = color),
+            hjust = -0.1, vjust = 1, size = 2.8, lineheight = 0.85,
+            show.legend = FALSE) +
+  scale_x_log10(
+    breaks = c(8, 13, 26, 52, 104, 156, 260),
+    labels = c("8", "13", "26", "52", "104", "156", "260")
+  ) +
+  scale_y_log10(
+    limits = c(ymin_clip, ymax_clip),
+    breaks = 10^seq(-4, -2),
+    labels = scales::trans_format("log10", scales::math_format(10^.x)),
+    expand = c(0, 0)
+  ) +
+  scale_color_identity() +
+  annotation_logticks(sides = "lb") +
+  coord_cartesian(xlim = c(8, 260), expand = FALSE) +
+  labs(
+    title = expression("Power spectrum of GP residual" ~ (f[residual]) ~ "with theoretical reference periods"),
+    subtitle = "Red = empirical peaks   |   Green dashed = climate-driven (annual / biannual)   |   Orange dashed = serotype dynamics",
+    x = "Period (weeks, log scale)",
+    y = "Spectral density (log scale)",
+    caption = "Dotted gray: median power (lower) and 2x median (upper) -- the peak-detection threshold."
+  ) +
+  theme(panel.grid.minor = element_blank(),
+        plot.caption = element_text(size = 9, hjust = 0),
+        plot.subtitle = element_text(size = 10))
+
+ggsave("../../results/figures/spectral_periodogram.png", p_periodogram,
+       width = 11, height = 5.5, dpi = 150)
 cat("  Saved: results/figures/spectral_periodogram.png\n")
 
 # ==============================================================================
@@ -247,8 +318,8 @@ cat("\nGenerating spectral context plot...\n")
 
 # Load serotype switches for annotation
 serotype_switches <- NULL
-if (file.exists("../results/serotype_switch_timing.csv")) {
-  serotype_switches <- read_csv("../results/serotype_switch_timing.csv",
+if (file.exists("../../results/serotype_switch_timing.csv")) {
+  serotype_switches <- read_csv("../../results/serotype_switch_timing.csv",
                                  show_col_types = FALSE)
   cat(sprintf("  Loaded %d serotype switch events\n", nrow(serotype_switches)))
 }
@@ -303,7 +374,7 @@ p_combined <- p_timeseries / p_periodogram_bottom +
     tag_levels = "A"
   )
 
-ggsave("../results/figures/spectral_with_context.png", p_combined,
+ggsave("../../results/figures/spectral_with_context.png", p_combined,
        width = 12, height = 10, dpi = 150)
 cat("  Saved: results/figures/spectral_with_context.png\n")
 

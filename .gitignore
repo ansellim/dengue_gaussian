@@ -28,9 +28,13 @@ results/*.rds
 results/forecasts/
 results/vae_export/
 results/logs/
+results/*.pt
+results/*_log.txt
+results/figures/archive/
 
 # Compiled Stan binaries (platform-specific, regenerated on compile)
-code/05_model3_climate_only
+code/05_model_climate_only
+code/14_model_climate_susceptible
 code/archive/*_model*[!.stan]
 
 # Figures are regenerable but we track them for convenience
@@ -40,5 +44,14 @@ code/archive/*_model*[!.stan]
 # Presentations
 *.pptx
 
-# Claude Code
+# Claude Code and planning documents
 .claude/
+CLAUDE.md
+claude.md
+docs/
+
+# Quarto / LaTeX build artifacts
+report/*.aux
+report/*.log
+report/*.tex
+report/report_files/

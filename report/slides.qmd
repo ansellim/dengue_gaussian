@@ -1,0 +1,1119 @@
+---
+title: "Serotype Signals in a Bayesian $R_t$ Model of Dengue in Singapore"
+subtitle: "A Semiparametric Bayesian Renewal Equation Model with Gaussian Process Residuals"
+author: "Ansel Lim"
+date: "16 April 2026"
+format:
+  beamer:
+    pdf-engine: pdflatex
+    theme: "Madrid"
+    colortheme: "seahorse"
+    fonttheme: "professionalfonts"
+    aspectratio: 169
+    navigation: horizontal
+    section-titles: false
+    fontsize: 10pt
+    keep-tex: true
+    include-in-header:
+      text: |
+        \usepackage{mathptmx}
+        \usepackage{booktabs}
+        \usepackage{amsmath}
+        \usepackage{pgfpages}
+        \setbeamertemplate{navigation symbols}{}
+        \setbeamertemplate{footline}[frame number]
+        \setbeamerfont{footnote}{size=\tiny}
+        \setbeamerfont{note page}{size=\footnotesize}
+        \AtBeginSection[]{}
+        %\setbeameroption{show notes}
+---
+
+# Motivation
+
+## Why Decompose Dengue $R_t$?
+
+\begin{columns}
+\begin{column}{0.55\textwidth}
+
+\textbf{The problem:}
+
+\begin{itemize}
+\item Singapore: recurrent dengue epidemics, year-round transmission
+\item Multiple interacting drivers: climate, vector ecology, serotype cycling, population immunity
+\item Standard $R_t$ methods (EpiEstim, EpiNow2) estimate Rt as a single latent quantity, without attributing variation to specific drivers
+\end{itemize}
+
+\vspace{0.3cm}
+
+\textbf{Our approach:}
+
+Decompose $\log(R_t)$ into \textbf{measured} (climate) and \textbf{unmeasured} (residual GP) components $\rightarrow$ examine residual for serotype dynamics
+
+\end{column}
+
+\begin{column}{0.42\textwidth}
+\footnotesize
+\textbf{Why Gaussian Processes?}
+\begin{itemize}
+\item \textbf{Nonparametric flexibility}: kernel encodes prior beliefs about smoothness and length scale without fixing a functional form
+\item \textbf{Additive decomposition}: climate covariates + GP residual in one coherent Bayesian model (sum of GPs is a GP)
+\item \textbf{Interpretable hyperparameters}: $\rho$ (weeks) and $\alpha$ (log-$R_t$ scale) carry direct epidemiological meaning
+\item \textbf{Calibrated uncertainty}: credible intervals tighten near data and propagate through the renewal equation
+\end{itemize}
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$45 s]:} Dengue is Singapore's main endemic arbovirus: recurrent epidemics despite strong public health infrastructure, driven by climate, vector ecology, serotype cycling, and population immunity acting at different timescales. Standard Rt methods like EpiEstim and EpiNow2 give you a single smoothed Rt trajectory but don't try to \emph{attribute} variation to specific drivers. Our approach decomposes $\log R_t$ additively into a parametric climate component and a nonparametric residual Gaussian process, so we can read the climate-versus-residual split directly from the posterior and then ask what the residual is tracking. GPs fit this job because they give nonparametric flexibility, additive decomposition (sum of GPs is a GP), and interpretable hyperparameters: the length scale and amplitude have direct epidemiological meaning.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Global burden: $\sim$390 M infections/year (Bhatt et al.\ 2013), $\sim$75\% asymptomatic.
+\item EpiEstim = piecewise-constant sliding window; EpiNow2 = GP-smoothed Rt. Neither decomposes.
+\item We are doing \emph{descriptive} decomposition, not causal identification. ``Residual'' means ``not explained by the parametric climate term'' --- it absorbs anything else.
+\item Why not a neural net / VAE instead? Interpretable hyperparameters, calibrated credible intervals from proper Bayesian inference, additivity with covariates in one model. Discussed briefly in future work.
+\end{itemize}
+}
+
+## Research Questions
+
+```{=latex}
+\vspace{0.3cm}
+\begin{enumerate}
+\item \textbf{Decomposition \& accounting.} How is weekly $\log R_t$ variation partitioned between \textit{climate covariates} and the \textit{residual Gaussian process component}, and how many cases does the residual component account for over the study period relative to a climate-only accounting? \textit{(variance decomposition and retrospective residual decomposition)}
+\vspace{0.2cm}
+\item \textbf{Serotype dynamics.} Is variation in the residual Gaussian process temporally coincident with serotype replacement events, and what lag and periodicity structures characterize the residual series? \textit{(switch profiles, cross-correlation, spectral analysis, per-switch residual contribution)}
+\vspace{0.2cm}
+\item \textbf{Robustness \& validation.} Are conclusions robust to climate lag choice, GP hyperprior means, and Gaussian process kernel specification? \textit{(climate lag sweep, GP hyperprior sweep, kernel sensitivity)}
+\vspace{0.2cm}
+\item \textbf{Operational utility.} Can the Gaussian process framework provide skillful short-horizon forecasts of $R_t$? \textit{(forecast scoring against a random walk baseline)}
+\vspace{0.2cm}
+\item \textbf{Outbreak risk.} How do $R_t$ fluctuations translate to outbreak sustaining probability, and do serotype switches open windows of elevated vulnerability? \textit{(branching process theory)}
+\end{enumerate}
+```
+
+\note{
+\textbf{Say [$\sim$45 s]:} Five questions, ordered to match the results flow later. \textit{One} --- how does log $R_t$ variation split between climate and residual, and how many cases can the residual component account for? \textit{Two} --- is the residual temporally coincident with serotype replacement events, and what lead/lag or periodicity structure does it show? \textit{Three} --- are the conclusions robust to climate-lag choice, GP hyperprior means, and kernel specification? \textit{Four} --- can this framework provide useful short-horizon forecasts? \textit{Five} --- how do Rt fluctuations translate into outbreak sustaining probability via branching process theory? I'll return to each in turn.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Q1 has two parts: log-scale variance decomposition (fast) \emph{and} a retrospective case-contribution accounting against observed infectious pressure (not a forward counterfactual).
+\item Q2 uses four complementary post-hoc methods on the posterior $f_{\text{residual}}$: switch profiles, CCF with entropy/turnover, spectral, per-switch case contribution.
+\item Q3 robustness: 4-cell lag sweep (2/3/4/6 wk), 3$\times$3 GP hyperprior sweep, 4-kernel comparison.
+\item Q4 uses CRPS-scored rolling-origin forecasts against a random-walk baseline.
+\item Q5 is the branching-process extension --- stylised outbreak-risk lens, not a calibrated forecast.
+\end{itemize}
+}
+
+# Data \& Methods
+
+## Data Sources
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\textbf{Dengue cases}
+\begin{itemize}
+\item Weekly notified cases, Singapore
+\item 2012--2022
+\item MOH Weekly Infectious Diseases Bulletin (data.gov.sg)
+\end{itemize}
+
+\vspace{0.3cm}
+
+\textbf{Climate covariates}
+\begin{itemize}
+\item Weekly mean temperature ($^\circ$C)
+\item Weekly total rainfall (mm)
+\item Standardized, \textbf{4-week lag} (vector ecology + case ascertainment; climate share $\le$ 3\% across lags 2--6 wks)
+\item Meteostat API (Changi Airport)
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{Serotype surveillance}
+\begin{itemize}
+\item Monthly DENV-1--4 proportions (NEA)
+\item GAM multinomial logistic smoothing
+\item Shannon entropy \& switch events
+\item Used \textbf{post-hoc only} (not as model covariate)
+\end{itemize}
+
+\vspace{0.3cm}
+
+\footnotesize
+\textit{Post-hoc design avoids}:
+\begin{itemize}
+\item Circularity / endogeneity
+\item Post-treatment conditioning
+\item Sampling bias (non-random subset typed)
+\item Measurement error (small-$n$ monthly)
+\item Resolution mismatch (monthly vs weekly)
+\item Underpowered regression ($n = 7$ switches)
+\item Forced alignment with residual GP
+\end{itemize}
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$45 s]:} Eleven years of weekly data, 2012--2022. After merging dengue with weather and filtering to complete observations we have 568 weeks in the dataset and 562 modeled weeks after a 6-week generation-interval burn-in. Cases come from MOH via data.gov.sg; weather from Changi Airport via the Meteostat API. Climate covariates are standardised and lagged 4 weeks to reflect vector ecology plus case notification delays. Serotype proportions are used \textbf{post-hoc only} --- never as a model covariate --- for four main reasons: they are computed from the same case series so including them would be endogenous, they are a monthly variable on a weekly model, only a non-random subset of cases is typed so the proportions are biased, and serotype composition is downstream of $R_t$ in the causal DAG. Keeping them out of the model means that any alignment between the residual GP and serotype dynamics has to emerge on its own.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item GAM multinomial smoothing (following Finch et al.\ 2025): cubic splines, simplex-constrained, denoising step for noisy typed-subsample proportions. Reduces 23 spurious month-to-month dominance flips to 7 real switch events.
+\item Lag sensitivity: climate variance share below 3\% at all lags (2.6 / 1.3 / 0.4 / 1.9 at 2/3/4/6 wk). Temperature coefficient flips sign across lags, indicating no stable weekly climate signal.
+\item Ascertainment varies by serotype (3:1 to 16:1 across serotypes/periods; Tan et al.\ 2019) --- another reason to treat serotype data as post-hoc only.
+\item Generation interval was built from the empirical study-period mean weekly temperature of 27.91\,$^\circ$C (EIP $\approx$10 d; GI mean 20.4 d).
+\end{itemize}
+}
+
+## Model: Semiparametric Decomposition of $\log(R_t)$
+
+$$\log(R_t) = \underbrace{\mu}_{\text{intercept}} + \underbrace{\beta_{\text{temp}} \cdot \text{temp}_{t-4} + \beta_{\text{rain}} \cdot \text{rain}_{t-4}}_{f_{\text{climate}}} + \underbrace{f_{\text{residual}}(t)}_{\text{GP}}$$
+
+\vspace{0.3cm}
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\textbf{Residual GP:}
+\begin{itemize}
+\item Mat\'ern 3/2 kernel (default in EpiNow2)
+\item Once-differentiable: allows rapid $R_t$ changes
+\item \textbf{HSGP approximation} ($M = 110$ basis functions): $\mathcal{O}(N^3) \rightarrow \mathcal{O}(MN)$
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{Transmission model:}
+\begin{itemize}
+\item Renewal equation: $\lambda_t = R_t \sum_{s=1}^{6} c_{t-s} w_s$
+\item Generation interval via \textbf{Monte Carlo convolution} of IIP $+$ viremia $+$ EIP $+$ bite delay (Chan \& Johansson 2012)
+\end{itemize}
+\textbf{Observation model:} Negative binomial
+\end{column}
+\end{columns}
+
+\vspace{0.2cm}
+
+\footnotesize
+\textit{$S = 6$ weeks: captures essentially all the GI mass at the empirical mean weekly temperature (27.9\,$^\circ$C, GI mean 20.4 d) and the 97.5th percentile at 25\,$^\circ$C cool-period sensitivity (mean $\approx$ 25 d, EIP-driven long tail).}
+
+\vspace{0.1cm}
+
+\textbf{Inference:} CmdStan 2.38.0, 4 chains $\times$ (1000 warmup + 1000 sampling).
+
+\note{
+\textbf{Say [$\sim$60 s]:} The core model decomposes log $R_t$ additively: an intercept $\mu$, a linear climate term at 4-week lag, and a nonparametric residual GP. The GP uses a Mat\'ern 3/2 kernel --- the EpiNow2 default --- which is once-differentiable, smooth enough to be sensible but flexible enough to track rapid outbreak transitions. Exact GP inference is cubic in the number of time points, so we use the Hilbert Space approximation with 110 basis functions, which makes HMC tractable in Stan. The transmission model is a standard discretised renewal equation with a 6-week generation interval. Rather than fitting a single parametric GI to published serial interval data, we construct it by Monte Carlo convolution of four biological components from Chan \& Johansson 2012: intrinsic incubation, viremia, extrinsic incubation (evaluated at Singapore's empirical mean weekly temperature of 27.9\,$^\circ$C), and mosquito biting delay. Observations are negative binomial.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item GI components: IIP Gamma(mean 5.9 d), viremia Uniform(0, 5 d), EIP Gamma(mean $\approx$10 d, interpolated from C\&J anchors 15 d at 25\,$^\circ$C / 6.5 d at 30\,$^\circ$C evaluated at empirical mean 27.91\,$^\circ$C), bite Exponential(mean 2 d). 200k Monte Carlo draws.
+\item Weekly PMF: $[0.000, 0.079, 0.504, 0.345, 0.066, 0.007]$; total mean 20.4 d, essentially all mass within 6 weeks.
+\item $S=6$ chosen to cover both the empirical baseline and the cool-period scenario (EIP 15 d at 25\,$^\circ$C, GI mean $\approx$25 d, 97.5\textsuperscript{th} percentile near 5.3 wks).
+\item GI is time-invariant --- a known simplification, flagged in Limitations. Actual weekly temperature range in the data is 24.8--30.6\,$^\circ$C.
+\item HSGP approximation: Riutort-Mayol et al.\ 2023. $M=110$ ensures the highest eigenfrequency exceeds the effective bandwidth at the 5\textsuperscript{th} percentile of the $\rho$ prior.
+\item Negative binomial observation model accommodates overdispersion from clustered transmission and heterogeneous reporting.
+\end{itemize}
+}
+
+## Weakly Informative Priors Generate Plausible Rt and Cover Observed Case Magnitudes
+
+\vspace{0.1cm}
+
+\begin{columns}
+\begin{column}{0.42\textwidth}
+\begin{table}
+\scriptsize
+\begin{tabular}{lll}
+\toprule
+\textbf{Parameter} & \textbf{Prior} & \textbf{Implication} \\
+\midrule
+$\mu$ & $\mathcal{N}(0, 0.5)$ & Median $R_t = 1$ \\
+$\beta_{\text{temp}},\ \beta_{\text{rain}}$ & $\mathcal{N}(0, 0.5)$ & Centered at no effect \\
+$\log(\rho)$ & $\mathcal{N}(\log 6, 0.5)$ & Length scale $\sim$6 wks \\
+$\log(\alpha)$ & $\mathcal{N}(-1.2, 0.5)$ & Amplitude $\sim$0.3 \\
+$\phi$ & half-$\mathcal{N}(0, 5)$ & Overdispersion \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\vspace{0.1cm}
+\scriptsize
+\textbf{How $\rho$, $\alpha$ were chosen:}
+\begin{itemize}\itemsep=0pt
+\item $\rho$: median ${\approx}2\times$ generation interval ($\sim$3 wks). Fast enough to track outbreak transitions, long enough to avoid overfitting weekly noise. 95\% CI ${\sim}[2.2, 16.1]$ wks spans outbreak-peak to seasonal scales.
+\item $\alpha$: median ${\approx}0.3$ on $\log R_t$ scale $\Rightarrow$ residual alone multiplies $R_t$ by $\exp(\pm 0.3) \approx [0.74, 1.35]$, matching realistic outbreak swings. 95\% CI for $\alpha$ ${\approx}[0.11, 0.80]$ admits weak and strong residual effects.
+\end{itemize}
+
+\vspace{0.1cm}
+\footnotesize
+\textbf{Prior predictive check:} 500 draws $\rightarrow$ renewal equation $\rightarrow$ median $R_t \approx 1$; prior case distribution covers observed range.
+\end{column}
+\begin{column}{0.56\textwidth}
+\includegraphics[width=\textwidth]{../results/figures/prior_predictive_summary.png}
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$45 s]:} All priors are weakly informative and grounded in epidemiology rather than fit to data. The intercept centres $R_t$ at 1, which is appropriate for endemic transmission. The GP length scale prior has median 6 weeks (95\% prior interval roughly 2 to 16 weeks), letting the residual track outbreak dynamics without committing to any particular timescale. The GP amplitude prior has median 0.3 on the log-$R_t$ scale, implying typical residual excursions of $\pm$30\%. We ran a prior predictive check by drawing from the joint prior and simulating case counts forward through the renewal equation. The figure shows that prior $R_t$ stays centred near 1 with wide enough bands to admit outbreak-like excursions, and the prior predictive case distribution covers the observed range. The priors are neither too tight nor too diffuse.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Why $\rho$ prior median $\approx$ 2$\times$ GI: fast enough to track outbreak transitions, slow enough not to overfit weekly noise.
+\item Why $\phi$ prior half-$\mathcal{N}(0, 5)$: tightened from half-$\mathcal{N}(0, 10)$ after PPC showed the looser prior let $\phi$ drift to $\sim$47 (near-Poisson), under-covering weekly fluctuations. Reported as a design iteration, not a result.
+\item Prior predictive also flagged a couple of mild warnings (some simulations with $R_t > 10$, some with $>10$k cases/week) --- consistent with priors that admit extreme draws but don't concentrate there. Acceptable for a weakly informative setup.
+\item Sensitivity to priors is formally checked later on the robustness slide.
+\end{itemize}
+}
+
+# Results
+
+## Climate Explains Less than 1 Percent of $R_t$ Variance
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\textbf{Climate effects are negligible:}
+
+\vspace{0.2cm}
+
+\begin{itemize}
+\item Temperature: $\times 0.983$ [0.962, 1.011]
+\item Rainfall: $\times 1.000$ [0.982, 1.020]
+\item Neither distinguishable from 1.0
+\end{itemize}
+
+\vspace{0.2cm}
+
+\textbf{Variance decomposition:}
+\begin{itemize}
+\item Climate: \textbf{0.6\%} of $R_t$ variance
+\item Residual GP: \textbf{99.4\%}
+\end{itemize}
+
+\vspace{0.2cm}
+
+\footnotesize
+\textit{Interpretation:} Climate is not negligible in general: it acts through slower vector-ecology mechanisms. At \textbf{weekly resolution}, faster processes dominate.
+\end{column}
+\begin{column}{0.50\textwidth}
+\includegraphics[width=\textwidth]{../results/figures/decomposition.png}
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$60 s]:} This is the first result. A 1-SD increase in weekly temperature multiplies $R_t$ by 0.983 with a 95\% CrI of 0.962 to 1.011, and rainfall by 1.000 with CrI 0.982 to 1.020 --- neither distinguishable from 1. On the variance-decomposition side, climate accounts for about 0.6\% of the log-$R_t$ variation and the residual GP for the remaining 99.4\%. The decomposition plot on the right shows the residual GP in orange picking up essentially all of the temporal structure while the climate component in blue is essentially flat.
+
+I want to be careful about the interpretation. This does \emph{not} say climate is unimportant for dengue overall. It says that at \emph{weekly resolution}, after standardising and lagging temperature and rainfall, the linear climate term carries almost no variance relative to the residual. Climate almost certainly matters through slower vector-ecology mechanisms operating on seasonal timescales, which a weekly linear term is simply not built to resolve. A monthly or seasonal model with temperature-driven vector dynamics would very likely assign climate a much larger share.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item prop\_climate median 0.6\%, 95\% CrI [0.0, 2.2]\%; prop\_residual median 99.4\%, 95\% CrI [97.8, 100.0]\%.
+\item $\hat\alpha = 0.30$ [0.26, 0.33], $\hat\rho = 2.83$ [2.06, 3.66] wks, $\hat\phi = 36.2$ [32.2, 40.5].
+\item ``Residual GP absorbs any smooth variation'' is a structural property --- revisited on slide 16--17 (audit).
+\item Next two slides confirm robustness to lag choice and prior choice.
+\end{itemize}
+}
+
+## Robustness: Climate Lag and GP Hyperprior Sweep
+
+\begin{columns}[T]
+\begin{column}{0.45\textwidth}
+\vspace{0pt}
+\includegraphics[width=\textwidth]{../results/figures/lag_sensitivity.png}
+
+\vspace{0.1cm}
+
+\includegraphics[width=\textwidth]{../results/figures/gp_prior_sensitivity.png}
+\end{column}
+\begin{column}{0.5\textwidth}
+\footnotesize
+\textbf{Method --- climate lag:}
+\begin{itemize}\itemsep=1pt
+\item Refit at climate lags 2 / 3 / 4 / 6 wks
+\end{itemize}
+
+\textbf{Result:}
+\begin{itemize}\itemsep=1pt
+\item Climate var.\ share $<3\%$ at every lag (2.6, 1.3, 0.4, 1.9\%)
+\item Temp coefficient \textbf{flips sign} (1.05 $\to$ 0.96): no stable weekly climate signal
+\end{itemize}
+
+\vspace{0.1cm}
+
+\textbf{Method --- GP hyperprior sweep:} $3 \times 3$ grid of hyperprior combinations: $\alpha$ prior median $\in \{0.15, 0.30, 0.60\}$, $\rho$ prior median $\in \{3, 6, 15\}$ weeks
+
+\vspace{0.1cm}
+
+\textbf{Result:}
+\begin{itemize}\itemsep=1pt
+\item Posterior variance attributable to climate: \textbf{0.43--0.47\%} across all 9 cells
+\item Posterior $\hat{\alpha} \approx 0.30$ regardless of prior median
+\item Posterior $\hat{\rho} \in [2.6, 3.2]$ weeks
+\end{itemize}
+
+\vspace{0.1cm}
+
+\textit{Decomposition is not an artefact of lag choice or GP hyperpriors.}
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$45 s]:} Two robustness checks. Top figure: refitting at climate lags of 2, 3, 4, and 6 weeks. Climate variance share stays below 3\% at every lag (2.6, 1.3, 0.4, 1.9\%), and the temperature coefficient \emph{flips sign} from 1.05 at lag 2 to 0.96 at lag 6 --- a genuine mechanistic climate effect should not be this lag-dependent. Bottom figure: a 3$\times$3 sweep of GP hyperprior means, with $\alpha$ prior median at 0.15, 0.30, and 0.60, and $\rho$ prior median at 3, 6, and 15 weeks. Nine refits in total. The posterior climate variance share lands between 0.43 and 0.47\% in every single cell, the posterior $\hat\alpha$ settles near 0.30 regardless of what the prior median was, and the posterior $\hat\rho$ stays in a narrow 2.6 to 3.2 week window. The data dominates both priors. The decomposition is not an artefact of either choice.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Lag-sweep CIs: lag 2 [0.9, 5.3]\%; lag 3 [0.3, 3.1]\%; lag 4 [0.03, 1.5]\%; lag 6 [0.6, 4.1]\%.
+\item Temp effect by lag: 1.049, 1.025, 0.983, 0.964.
+\item GP hyperprior sweep: 9 fits, all with zero divergent transitions. $\sigma$ fixed at 0.5 on log scale. prop\_climate range 0.03 pp across cells.
+\item Not swept: $\sigma$ of the hyperpriors (fixed at 0.5), $\phi$ prior. $\phi$ was separately tightened from N(0, 10)+ to N(0, 5)+ to improve PPC coverage.
+\end{itemize}
+}
+
+## Model Validation
+
+\begin{center}
+\includegraphics[width=0.7\textwidth]{../results/figures/posterior_predictive_timeseries.png}
+\end{center}
+
+\vspace{-0.2cm}
+
+\begin{itemize}
+\item Posterior predictive tracks timing and magnitude of all major peaks (2013, 2019, 2020, 2022)
+\item \textbf{Observation layer is well calibrated}: empirical coverage of the nominal 95\% interval $= 98.4\%$, 80\% interval $= 91.8\%$
+\item This is not forecasting. This is a one-\textbf{week}-ahead predictive check: each week is predicted from the previous 6 weeks of \textbf{observed} cases (the generation interval support).
+\end{itemize}
+
+\note{
+\textbf{Say [$\sim$30 s]:} Posterior predictive check. The model captures the timing and magnitude of all four major epidemic peaks: the 2013 DENV-1 wave, the 2019 and 2020 outbreaks, and the large 2022 epidemic. Empirical coverage of the nominal 95\% interval is 98.4\%, and of the 80\% interval is 91.8\% --- slightly conservative rather than under-covered. One important subtlety: this is a \emph{one-week-ahead} predictive check that uses the \emph{observed} past cases as infectious pressure, which is the standard PPC for renewal models. It is \emph{not} a multi-step forecast --- that comes later and is a very different story.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item How case predictions emerge: per draw, $\lambda_t = R_t \cdot I_t$ (with $I_t$ = observed-case infectious pressure via GI), then \texttt{neg\_binomial\_2\_rng}$(\lambda_t, \phi)$ in Stan's generated quantities.
+\item Coverage before tightening $\phi$ prior from N(0,10) to N(0,5): intervals under-covered fluctuations at $\phi \sim 47$ (near-Poisson). Current $\phi \approx 36$ restores coverage.
+\item This PPC is what Cori et al.\ 2013 and EpiNow2 use --- it is not a forecasting benchmark.
+\end{itemize}
+}
+
+## MCMC Convergence Diagnostics
+
+\begin{columns}[T]
+\begin{column}{0.68\textwidth}
+\vspace{0pt}
+\includegraphics[width=\textwidth]{../results/figures/convergence_diagnostics.png}
+\end{column}
+\begin{column}{0.30\textwidth}
+\footnotesize
+\textbf{Sampler:} 4 chains $\times$ 1000 post-warmup draws (HMC/NUTS, \texttt{adapt\_delta} $= 0.95$)
+
+\vspace{0.15cm}
+
+\textbf{Diagnostics:}
+\begin{itemize}\itemsep=1pt
+\item \textbf{0} divergent transitions
+\item \textbf{0} max-tree-depth hits
+\item $\hat{R} < 1.01$ for every parameter and every $f_{\text{residual}}$ component (max $= 1.003$)
+\item Bulk ESS $> 1900$ for all parameters
+\item Bulk ESS for $f_{\text{residual}} > 3647$
+\item Trace plots show well-mixed, overlapping chains with no drift
+\end{itemize}
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$25 s]:} Quick convergence check before the results. Zero divergent transitions, zero max-tree-depth hits, split-$\hat{R}$ below 1.01 for every parameter and every $f_{\text{residual}}$ component (max 1.003), bulk ESS well above 400 for everything. Trace plots overlap cleanly. The posterior is reliable, so any remaining concerns about the decomposition or interpretation are scientific rather than computational.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Sampler settings: 4 chains, 1000 warmup + 1000 sampling, NUTS, \texttt{adapt\_delta} = 0.95, max tree-depth = 12.
+\item No reparameterisation needed: HSGP uses iid standard-normal basis coefficients, already in the right geometry for HMC.
+\item Min bulk ESS across $f_{\text{residual}}$ components: 3647 --- comfortably above the 400 threshold (Vehtari et al.\ 2021).
+\end{itemize}
+}
+
+## Post-hoc Serotype Analysis: Idea and Methods
+
+\scriptsize
+
+\textbf{Idea.} The residual GP $f_{\text{residual}}$ absorbs ${\sim}99.4\%$ of $R_t$ variance --- unexplained by climate. We hypothesize that \emph{serotype dynamics} (replacement, diversity) drive this residual via immunity depletion: a population encountering a newly dominant serotype is effectively more susceptible, elevating $R_t$.
+
+\textbf{What we do.} Use the \emph{already-fitted} posterior $f_{\text{residual}}$ as a proxy for non-climate drivers and correlate it with independent serotype data. \textit{No refit, no additional Stan covariates.} Four complementary lenses on the same residual:
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\textbf{1. Switch profiles} ($n = 7$ events)
+\begin{itemize}\itemsep0pt
+\item Extract $f_{\text{residual}}$ in $[-6, +12]$ month window around each switch
+\item Tests event-by-event immunity-depletion signature (rise at switch, decay as immunity accumulates)
+\end{itemize}
+
+\vspace{0.15cm}
+
+\textbf{2. Cross-correlation (CCF)}
+\begin{itemize}\itemsep0pt
+\item Monthly $f_{\text{residual}}$ vs.\ Shannon entropy and turnover rate, lags $\pm 12$ months
+\item Systematic lead--lag $\rightarrow$ early-warning window
+\end{itemize}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{3. Spectral analysis}
+\begin{itemize}\itemsep0pt
+\item Decompose $f_{\text{residual}}$ into contributions at each cycle length (FFT power spectrum, credible band from draws)
+\item Peaks flag the timescales on which the residual oscillates; tests whether they match the multi-annual cycle that cross-immunity + seasonal vector dynamics can generate (Wearing \& Rohani 2006)
+\end{itemize}
+
+\vspace{0.15cm}
+
+\textbf{4. Per-switch case decomposition}
+\begin{itemize}\itemsep0pt
+\item Compare full model to climate-only reference $R_t^{\text{ref}} = \exp(\mu + f_{\text{climate}})$
+\item Translates log-scale residual into per-event \textbf{case contribution} (retrospective accounting)
+\end{itemize}
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$45 s]:} The residual GP captures essentially all of the non-climate variance. The obvious question is what it is tracking. We hypothesise serotype-driven immunity depletion: when a new serotype becomes dominant, the effectively-susceptible population is larger and $R_t$ goes up. I want to stress that this is a \emph{hypothesis} we are testing on an already-fitted residual --- no refit, no new covariates --- using four complementary lenses. Switch profiles look at each of the 7 replacement events individually. CCF tests for systematic lead--lag between $f_{\text{residual}}$ and serotype turnover or entropy. Spectral analysis asks whether the residual's temporal structure matches multi-annual cycles predicted by multi-strain SIR theory. Per-switch case decomposition translates the log-scale residual into a per-event case contribution. These are descriptive and hypothesis-generating, not formal hypothesis tests.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Why post-hoc only: serotype data can't enter as a covariate (endogeneity, post-treatment conditioning, monthly-vs-weekly resolution). Covered on the data slide.
+\item 7 switches over 11 years gives no real statistical power for formal testing --- descriptive only.
+\item Two further audit analyses follow the four methods: a susceptibility-reconstruction sanity check and a proper M0/M1/M2 nested model comparison. Both test whether the residual really is immunity-driven.
+\end{itemize}
+}
+
+## Serotype Switches Associate with Elevated $R_t$
+
+\begin{center}
+\includegraphics[width=0.7\textwidth]{../results/figures/serotype_panel.png}
+\end{center}
+
+\vspace{-0.2cm}
+
+\footnotesize
+\textbf{5 of 7} serotype switch events show $P(\text{elevated } f_{\text{residual}}) > 0.75$ in 0--3 months post-switch. Strongest: DENV-2 $\to$ DENV-3 (Feb 2020), $P = 1.0$, 20--35\% $R_t$ increase.
+
+\note{
+\textbf{Say [$\sim$30 s]:} Three-panel overview. Top is the GP residual with credible bands. Middle is the GAM-smoothed serotype proportions. Bottom is Shannon entropy. Vertical lines mark the 7 switch events. The descriptive pattern: 5 of 7 switches show posterior probability above 0.75 that $f_{\text{residual}}$ is elevated in the first 3 months post-switch. The strongest is the February 2020 DENV-2 $\to$ DENV-3 emergence --- posterior probability 1.0 --- which is consistent with DENV-3 re-entering a population with limited recent exposure.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Per-switch $P$(elevated) 0--3 mo: Mar 2013 $\approx$ 100\%, Nov 2015 $\approx$ 83\%, Sep 2016 $\approx$ 27\%, Dec 2016 $\approx$ 0\%, Feb 2020 $\approx$ 100\%, Jun 2020 $\approx$ 99\%, Mar 2021 $\approx$ 100\%.
+\item ``5 of 7'' uses a 0.75 threshold; choice is arbitrary but consistent across events.
+\item Co-occurrence is descriptive, not causal --- a caveat we come back to in the audit slides.
+\end{itemize}
+}
+
+## Temporal Profiles Around Switches: Part 1 (2013--2016)
+
+\begin{center}
+\includegraphics[width=0.7\textwidth]{../results/figures/serotype_switch_profiles_part1.png}
+\end{center}
+
+\vspace{-0.2cm}
+
+\footnotesize
+DENV-1 / DENV-2 cycling period. Predicted immunity-depletion pattern: \textbf{rise at switch, decline during stable dominance}.
+
+\note{
+\textbf{Say [$\sim$30 s]:} Zooming into the first group of switches --- the 2013 to 2016 DENV-1/DENV-2 cycling period. The cleanest signal is the March 2013 DENV-2 $\to$ DENV-1 switch, where the residual rises above zero in the months immediately after. The 2015 and 2016 profiles are more ambiguous: back-and-forth dominance flips during a volatile transitional period rather than clean replacement events. With only 7 switch events in 11 years this is necessarily descriptive --- I'm not running formal hypothesis tests here.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item The ``immunity depletion signature'' (rise-then-decay) is a theoretical expectation from multi-strain SIR, not a statistical test.
+\item Dec 2016 profile is visually dropping rather than rising --- flagged explicitly rather than glossed over.
+\end{itemize}
+}
+
+## Temporal Profiles Around Switches: Part 2 (2020--2021)
+
+\begin{center}
+\includegraphics[width=0.7\textwidth]{../results/figures/serotype_switch_profiles_part2.png}
+\end{center}
+
+\vspace{-0.2cm}
+
+\footnotesize
+DENV-2 $\leftrightarrow$ DENV-3 transition era. \textbf{Feb 2020 DENV-3 emergence} produces the clearest rise-and-decay signature (strongest event; $P = 1.0$).
+
+\note{
+\textbf{Say [$\sim$30 s]:} The second group is the 2020--2021 DENV-2 / DENV-3 transitions. February 2020 is the cleanest event in the decade: the residual was already rising before the switch, peaked shortly after, then decayed. This is the event where the per-switch case decomposition attributes roughly 4,400 excess cases on the residual side. The two later switches overlap the COVID-19 period --- surveillance, travel, and vector control were all disrupted --- so I won't make strong mechanistic claims about them. The pandemic is an unmeasured confounder throughout 2020--2021.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Feb 2020: $P$(elevated) = 1.0, +4,419 cases [2,925 --- 6,043] in the per-switch decomposition. Only event where the residual adds significantly positive cases on a retrospective basis.
+\item DENV-3 was last dominant in Singapore around 2008, so by 2019--2020 much of the population had limited recent DENV-3 exposure --- consistent with, but not proof of, the immunity-depletion hypothesis.
+\end{itemize}
+}
+
+## Serotype Turnover Leads $R_t$ by ${\sim}8$ Months
+
+\begin{columns}
+\begin{column}{0.50\textwidth}
+\includegraphics[width=\textwidth]{../results/figures/serotype_ccf.png}
+\end{column}
+\begin{column}{0.46\textwidth}
+\footnotesize
+\textbf{How to read the figure:}
+\begin{itemize}
+\item Bar at lag $k$ = $\text{cor}(f_{\text{residual},\,t+k},\ \text{indicator}_t)$
+\item \textbf{Lag 0} = same month (contemporaneous)
+\item \textbf{Positive lag} = indicator leads $R_t$
+\item \textbf{Negative lag} = $R_t$ leads indicator
+\item Dashed lines: $\pm 1.96/\sqrt{n}$ noise band
+\end{itemize}
+
+\textbf{Indicators:}
+\begin{itemize}
+\item \emph{Turnover rate} $= \lvert \Delta \text{dominant prop.}\rvert$: month-to-month change in the dominant serotype's smoothed share
+\item \emph{Shannon entropy}: diversity of co-circulating serotypes
+\end{itemize}
+
+\textbf{Result:}
+\begin{itemize}
+\item \textbf{Turnover rate} peaks at lag \textbf{+8 to +9 months} ($r \approx 0.23$ at $+8$, $0.19$ at $+9$; lag $+8$ exceeds the noise band) $\Rightarrow$ turnover precedes $R_t$ elevation by ${\sim}8$ months (red bars)
+\item \emph{Entropy} CCF stays within the noise band at all lags
+\end{itemize}
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$45 s]:} The cross-correlation tests whether two serotype indicators systematically lead or lag the residual GP. Turnover rate is the absolute month-to-month change in the currently-dominant serotype's proportion --- it spikes during a replacement event. Shannon entropy is the standard diversity measure. Convention: a positive-lag peak means the indicator leads $f_{\text{residual}}$. Top panel: turnover rate has a peak at lag $+$8 months with correlation roughly 0.23, which is the only bar that clearly exceeds the $\pm 1.96/\sqrt{n}$ noise band. So turnover today predicts $f_{\text{residual}}$ about 8 months from now. Bottom panel: Shannon entropy CCF stays within noise at every lag, so I wouldn't credit entropy specifically. The actionable signal is in turnover, not entropy --- and I should flag up front that a correlation of 0.23, even with a statistically significant lead, is a weak effect at the population scale.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Turnover: $r \approx 0.23$ at lag $+$8, 0.19 at lag $+$9; both highlighted in red on the figure.
+\item Entropy: all lags within $\pm 0.17$ noise band.
+\item Aggregation to monthly for both series; 120 observations (2013--2022 serotype surveillance).
+\item ``8 months'' is consistent with a susceptible-pool replenishment timescale in principle but the CCF alone cannot establish that mechanism.
+\item The lead does \emph{not} translate into weekly forecast skill (see Forecasting slide).
+\end{itemize}
+}
+
+## Spectral Analysis of $f_{\text{residual}}$: Structure Consistent with Serotype-Driven Immunity?
+
+\begin{columns}[T]
+\begin{column}{0.48\textwidth}
+\vspace{0pt}
+\includegraphics[width=\textwidth]{../results/figures/spectral_with_context.png}
+\end{column}
+\begin{column}{0.48\textwidth}
+\footnotesize
+\textbf{Reading the figure:}
+\begin{itemize}\itemsep=1pt
+\item \textbf{Top:} $f_{\text{residual}}$ over time, switches in red
+\item \textbf{Bottom:} power spectrum: where the residual concentrates its variance, by cycle length
+\end{itemize}
+
+\vspace{0.15cm}
+
+\textbf{Peaks the spectrum reveals:}
+\begin{itemize}\itemsep=1pt
+\item \textbf{26 wks}: biannual monsoon
+\item \textbf{51 wks}: annual seasonality
+\item \textbf{${\sim}1.5$ yr} (80 wk): multi-annual structure
+\item \textbf{${\sim}3.6$ yr} (187 wk): multi-annual dengue cycle
+\end{itemize}
+
+\vspace{0.15cm}
+
+\textbf{Why this matters:} the ${\sim}3.6$-yr peak sits in the range of the ${\sim}3$-year total-incidence cycle that cross-immunity plus seasonal vector dynamics can generate (Wearing \& Rohani 2006). The residual is not white noise: it carries multi-annual structure consistent with cross-immunity dynamics.
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$45 s]:} Spectral analysis. We take the posterior median $f_{\text{residual}}$, apply a Hanning-windowed FFT, and propagate uncertainty across posterior draws to get a credible band on the power spectrum. Two panels: top is the residual time series, bottom is the spectrum. The spectrum shows peaks at a biannual 26-week cycle corresponding to Singapore's two monsoon seasons, an annual 51-week residual seasonality, a 1.5-year multi-annual structure, and the longest-period peak around 3.6 years. That longest peak sits in the same range as the roughly 3-year total-incidence cycle that Wearing \& Rohani 2006 showed can be generated by cross-immunity plus seasonal vector dynamics. I want to be explicit about the interpretation: this is \emph{consistent with} serotype-driven cycling but not a statistical proof of it. With only 11 years of data we see fewer than 3 full cycles at the 3.6-year period, so the multi-year peak is suggestive rather than conclusive, and I would not over-read the 1.5-year peak at all.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Peak detection uses a permissive ``2$\times$ median power'' threshold, which is why the figure labels a few modest bumps. The seasonal peaks (26 wk, 51 wk) are the clearest; the multi-year peaks are broad.
+\item Wearing \& Rohani 2006 report a $\sim$3.4-yr dominant period for their best-fitting cross-immunity-plus-seasonality model (PNAS doi:10.1073/pnas.0602960103). My 3.6-yr peak is in that range but the citation supports the \emph{timescale}, not the exact number.
+\item Reference vertical lines on the figure are at 1, 2, and 3 years (52, 104, 156 wk).
+\end{itemize}
+}
+
+## Susceptible Depletion Cannot Generate the GP Residual
+
+\begin{columns}[T]
+\begin{column}{0.62\textwidth}
+\vspace{0pt}
+\includegraphics[width=\textwidth]{../results/figures/susceptible_vs_residual_timescale.png}
+
+\vspace{0.15cm}
+
+\textit{Serotype-aware susceptible reconstruction may not be what $f_{\text{residual}}$ is tracking.}
+\end{column}
+\begin{column}{0.36\textwidth}
+\footnotesize
+\textbf{Question.} If $f_{\text{residual}}$ is really tracking serotype-driven immunity depletion, an explicit reconstruction of the susceptible fraction should look like it.
+
+\vspace{0.15cm}
+
+\textbf{Method.} Reconstruct $S_{\text{dom}}(t)$ = fraction susceptible to the \emph{currently dominant} serotype, via per-serotype pools depleted weekly by their own cases, then compared on the same $\log R_t$ scale as $f_{\text{residual}}$.
+
+\vspace{0.15cm}
+
+\textbf{Figure --- two failures:}
+\begin{itemize}\itemsep=2pt
+\item \textbf{Top:} $f_{\text{residual}}$ (blue) oscillates with amplitude $\hat{\alpha} \approx 0.30$; $\log S_{\text{dom}}$ (red) is essentially a flat line --- total range only ${\approx}0.10$ (${\sim}33\%$ of the residual)
+\item \textbf{Bottom (zoom):} $\log S_{\text{dom}}$ on its own scale --- jagged drops at dominance flips, but no high-frequency oscillation
+\end{itemize}
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$60 s]:} This is a sanity check for the serotype-driven-immunity story. The question is narrow: if we build the best serotype-aware susceptible reconstruction we can defend --- one pool per serotype, depleted by its own cases, then pick the pool for whichever serotype is currently dominant --- does it even look like $f_{\text{residual}}$? The figure is the punchline. Top panel overlays both quantities on the same $\log R_t$ axis: the blue GP residual oscillates with amplitude around 0.3, while the red $\log S_{\text{dom}}$ is essentially a flat line because its full range across 11 years is only about 0.10 --- roughly one-third of the GP amplitude. The bottom panel zooms in: $\log S_{\text{dom}}$ has a little jagged structure at dominance flips but no fast oscillation anywhere. So the reconstruction fails on \emph{two} independent axes --- amplitude (too small) and timescale (too slow). Even a serotype-aware smooth susceptible pool cannot mechanistically generate the residual we observe. The proper model-comparison version of this test is on the next slide.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Pool reconstruction: weekly SIR-style accounting. $S_0 = 0.75$, EF = 10, population 5.5M, small birth replenishment and slow waning. Simplifications flagged in backup.
+\item Broader 60-cell grid (EF, $S_0$, reset on/off, births/waning on/off): realistic cells land at 15--40\% of GP amplitude; only extreme corners reach 100\% and even they fail the timescale test.
+\item All immunity treated homogeneously --- no homotypic vs heterotypic distinction. If the residual tracks heterotypic cross-protection dynamics, this reconstruction cannot see it.
+\item Ruling OUT: smooth $S_{\text{dom}}$ under SIR pool accounting as \emph{the} driver. NOT ruling out immunity in any form --- just not \emph{this} instantiation.
+\end{itemize}
+}
+
+## Model Comparison: Adding Explicit Susceptibility Does Not Help
+
+\begin{columns}[T]
+\begin{column}{0.55\textwidth}
+\vspace{0pt}
+\includegraphics[width=\textwidth]{../results/figures/susceptible_audit_comparison.png}
+\vspace{0.1cm}
+
+\textit{The residual is tracking something explicit susceptibility cannot capture: spatial heterogeneity, importations, vector dynamics, or other unobserved complexity.}
+
+\end{column}
+\begin{column}{0.43\textwidth}
+\scriptsize
+\textbf{Two susceptible covariates}, each reconstructed weekly from cumulative cases under simple SIR-pool accounting:
+\begin{itemize}\itemsep=1pt
+\item \textbf{$S_{\text{pop}}$ (serotype-blind):} a \emph{single} national pool depleted by \emph{all} cases regardless of serotype --- the classical SIR view
+\item \textbf{$S_{\text{dom}}$ (serotype-aware):} \emph{four} parallel pools, one per serotype, each depleted only by its own cases; at each week we pick the pool for whichever serotype is currently dominant
+\end{itemize}
+
+\vspace{0.1cm}
+
+\footnotesize
+\textbf{Three nested models} (same priors, MCMC):
+\begin{itemize}\itemsep=1pt
+\item \textbf{M0:} climate $+$ GP (baseline)
+\item \textbf{M1:} M0 $+ \beta_S \log S_{\text{pop}}$
+\item \textbf{M2:} M0 $+ \beta_S \log S_{\text{dom}}$
+\end{itemize}
+
+\vspace{0.15cm}
+
+\textbf{Results} (across full $S_0$ sensitivity sweep):
+\begin{itemize}\itemsep=1pt
+\item GP amplitude $\hat{\alpha}$ \textbf{unchanged} across all 8 fits ($0.305$--$0.308$): adding $S$ does \emph{not} shrink the GP.
+\item $\beta_S$ credible intervals \textbf{include zero} in every M1 and M2 configuration --- including the data-driven historical M2.
+\end{itemize}
+
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$75 s]:} This is the most important qualifier on the serotype story. We re-fit M0 twice: once adding $\log S_{\text{pop}}$ (the classical single-pool view) as an extra covariate alongside the GP, once adding $\log S_{\text{dom}}$ (the serotype-aware version). Same priors, same MCMC, same kernel --- the only thing that changes is whether the susceptible covariate is in the linear predictor. If the GP residual were really tracking serotype-driven immunity depletion, adding an explicit per-serotype susceptibility covariate should \emph{shrink} the GP amplitude and pull away variance. It doesn't.
+
+Across the full $S_0$ sensitivity sweep, $\hat\alpha$ stays at 0.305 to 0.308 --- effectively the same as M0's 0.307. The $\beta_S$ posteriors are small and their credible intervals include zero in every M1 and M2 configuration, including the data-driven historical $S_0$ that was calibrated from observed serotype proportions and Singapore adult seroprevalence. Directionally the $S_{\text{pop}}$ versions are mildly positive and the data-driven $S_{\text{dom}}$ is mildly negative --- neither is significant. LOO ELPD differences against M0 are all within one to two units of zero with larger standard errors, so nothing is actually preferred.
+
+The honest reading: the descriptive associations from the earlier slides are real --- turnover rate leads by $\sim$8 months, 5 of 7 switches show post-switch elevation, the spectrum has multi-annual structure --- but the mechanistic story ``serotype switch drives residual $R_t$ via susceptible pool replenishment'' cannot be reproduced when we actually instantiate that mechanism as a model. The residual is tracking something that explicit SIR-style susceptibility reconstruction cannot capture. Candidates include spatial heterogeneity in immunity, importation pulses, vector or behavioural dynamics that co-vary with serotype shifts, or individual-level immune complexity like cross-immunity and ADE that simple pool accounting cannot represent. This is the empirical motivation for the spatially explicit multi-serotype SIR in our future directions.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item $S_0$ sweep: uniform $\{0.50, 0.75, 0.95\}$ plus a \emph{historical} per-serotype version --- $S_{D1} \approx 0.65$, $S_{D2} \approx 0.89$, $S_{D3} \approx 0.97$, $S_{D4} \approx 0.99$ --- derived from observed 2013--2014 serotype proportions and $\sim$50\% adult seroprevalence (Tan et al.\ 2019).
+\item M1 variance absorbed by $S$: $\sim$1.7\%; M2 uniform: $\sim$0.4\%; M2 historical: $\sim$0.5\%. Residual GP still 97--99\%.
+\item M1 $\beta_S$ median $\approx +0.036$, $P(\beta_S>0) \approx 0.85$; M2 uniform $\approx +0.013$; M2 historical $\approx -0.005$ ($P = 0.42$ --- data-driven version points the wrong way).
+\item LOO ELPD vs M0: M1 uniform $+1.0$ to $+1.7$; M2 uniform $-1.2$ to $-0.5$; M2 historical $+0.08$. All well within SE.
+\item Feedback caveat: $\log S$ is built from cumulative cases, which is also the outcome, so any small ELPD bump could be slow-drift absorption, not mechanism.
+\item LOO Pareto-$k$ warnings on some obs --- model-level summaries robust, individual contributions less so.
+\item Homogeneous immunity in the audit --- no homotypic/heterotypic split. Heterotypic cross-protection dynamics could in principle escape this test.
+\end{itemize}
+}
+
+## Per-switch Residual Case Contribution
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\includegraphics[width=\textwidth]{../results/figures/residual_switch_contribution.png}
+\end{column}
+\begin{column}{0.48\textwidth}
+\scriptsize
+\textbf{Question:} of this week's expected cases, how many are attributable to $f_{\text{residual}}$ rather than climate alone?
+
+\vspace{0.1cm}
+
+\textbf{Setup --- the renewal equation gives expected cases as}
+\[
+  \lambda_t = R_t \cdot I_t, \qquad
+  I_t = \sum_{s=1}^{6} c_{t-s}\, w_s
+\]
+where $I_t$ is the infectious pressure.
+
+\vspace{0.1cm}
+
+\textbf{Method (3 steps):}
+\begin{itemize}\itemsep=0pt
+\item[1.] \textbf{Full model:} $\lambda_t = \exp(\mu + f_{\text{climate}} + f_{\text{residual}}) \cdot I_t$
+\item[2.] \textbf{Climate-only reference:} $\lambda_t^{\text{ref}} = \exp(\mu + f_{\text{climate}}) \cdot I_t$ (zero out $f_{\text{residual}}$, keep \emph{same} $I_t$)
+\item[3.] \textbf{Cumulate the weekly gap} over the 6 months after each switch: $\sum_{t=0}^{26\text{ wk}} (\lambda_t - \lambda_t^{\text{ref}})$
+\end{itemize}
+
+\vspace{0.1cm}
+
+\textit{Why $I_t$ is the amplifier:} a $+0.2$ on log $R_t$ during a quiet week (small $I_t$) adds a handful of cases; the same bump during an outbreak (large $I_t$) adds thousands.
+
+\vspace{0.1cm}
+
+\textbf{Feb 2020 DENV-3: +4,419} [2,925--6,043] = model expected $\sim$4,400 more cases over 6 months post-switch than the climate-only reference. Other switches: $\approx 0$.
+
+\vspace{0.1cm}
+
+\textbf{Caveat:} this is a \emph{retrospective accounting} of how many of the observed cases the residual GP explains, not a \emph{forward counterfactual} of how many cases the switch caused.
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$60 s]:} This is the accounting slide. The residual GP lives on a log scale, which is hard to talk about, so I translate it into a case-count quantity. For each week the full model gives expected cases $\lambda_t = R_t \cdot I_t$; I build a climate-only reference $\lambda_t^{\text{ref}}$ that uses the same observed infectious pressure but zeros out the residual GP; the weekly gap is $\lambda_t - \lambda_t^{\text{ref}}$, which I cumulate over the 26 weeks after each switch. Why infectious pressure matters: a residual bump of 0.3 in a quiet week where $I_t$ is 20 adds maybe 7 cases, but the same bump in an outbreak week where $I_t$ is 500 adds about 175. The contribution is the residual \emph{weighted by how much transmission is flowing through the renewal equation at that moment}. The result: only the February 2020 DENV-3 emergence gives a clearly significant positive contribution of about $+$4,400 cases over 6 months. The other six switches sit near zero or slightly negative. That is consistent with a novel serotype on a large naive pool producing a bigger effect than routine serotype rotation. The strong caveat: this is retrospective accounting against the observed series, not a forward counterfactual of ``cases caused by the switch,'' and the residual GP absorbs all non-climate structure --- immunity, importations, spatial heterogeneity --- so attribution is to the residual, not specifically to serotypes.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Feb 2020 DENV-3: $+$4,419 cases, 95\% CrI [2,925 --- 6,043]. Only clearly significant event.
+\item Other switches all indistinguishable from zero or mildly negative.
+\item Why it's not a forward counterfactual: no iteration of the renewal equation under the alternative Rt from $t = 1$ --- that would compound week-by-week and is much less identifiable. This is bookkeeping against the observed series.
+\item Algebraic identity: $\lambda_t - \lambda_t^{\text{ref}} = \lambda_t^{\text{ref}} \cdot (e^{f_{\text{residual}}} - 1)$, which is where the ``amplifier'' intuition comes from.
+\item Does not establish causation. That has to come from the temporal match between residual excursions and switch events.
+\end{itemize}
+}
+
+## Kernel Comparison: Conclusions Are Robust
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\includegraphics[width=\textwidth]{../results/figures/kernel_rt_comparison.png}
+
+\footnotesize
+$R_t$ trajectories nearly identical across all 4 kernels. $|\Delta\text{ELPD}| < 2$ for all.
+\end{column}
+\begin{column}{0.48\textwidth}
+\includegraphics[width=\textwidth]{../results/figures/kernel_serotype_detectability.png}
+
+\footnotesize
+All 4 kernels detect the \textbf{same 5/7 switches} ($P > 0.75$). Scientific conclusions hold regardless of kernel choice.
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$25 s]:} A third robustness check: we refit with all four standard GP kernels --- Mat\'ern 1/2, 3/2, 5/2, and squared exponential. Left: Rt trajectories are visually identical, and $|\Delta \text{ELPD}|$ is below 2 for all --- statistically indistinguishable fits. Right: all four kernels detect the same 5 of 7 switch events above the 0.75 posterior probability threshold. The scientific conclusions do not depend on kernel choice.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Mat\'ern 1/2 (Ornstein--Uhlenbeck) marginally preferred by ELPD, consistent with dengue $R_t$ having abrupt transitions.
+\item Choice of Mat\'ern 3/2 as baseline follows EpiNow2 default.
+\item Kernel comparison is the third robustness leg alongside lag sweep and GP hyperprior sweep.
+\end{itemize}
+}
+
+## Forecasting: Methodology
+
+\begin{columns}
+\begin{column}{0.58\textwidth}
+\includegraphics[width=\textwidth]{../results/figures/forecast_rolling_origin_design.png}
+\end{column}
+\begin{column}{0.40\textwidth}
+\includegraphics[width=\textwidth]{../results/figures/forecast_crps_concept.png}
+\end{column}
+\end{columns}
+
+\vspace{0.1cm}
+
+\footnotesize
+\begin{itemize}\itemsep=1pt
+\item \textbf{CRPS} (Continuous Ranked Probability Score) $= \int \left(F_{\text{pred}}(x) - \mathbf{1}\{x \geq y_{\text{obs}}\}\right)^2 dx$: integrated squared gap between the \textcolor{blue}{predictive CDF} and the step function at the observed value (shaded area in right figure).
+\item \textbf{Baselines:} random walk on cases (persistence; min.\ bar) and $R_t = 1$ (endemic).
+\item \textbf{Skill} $= 1 - \text{CRPS}_{\text{GP}}/\text{CRPS}_{\text{baseline}}$ ($> 0 \Rightarrow$ GP wins).
+\item Caveat: 4 origins, late-2022 only. Illustrative experiment.
+\end{itemize}
+
+\note{
+\textbf{Say [$\sim$30 s]:} Quick methodology for the forecasting experiment. Left figure: rolling-origin design. We pick 4 refit cutoffs every 4 weeks through July--September 2022 and from each forecast 4, 8, and 13 weeks ahead. Right figure: what CRPS actually measures --- the integrated squared gap between the predictive CDF (blue) and the observation step function at $y_{\text{obs}}$ (black). Smaller is better, same units as the observation. It is a strictly proper scoring rule, so both calibration and sharpness count. Baselines are a random walk on cases (persistence, the standard minimum bar) and a trivial $R_t=1$ reference. Positive skill score means we beat the baseline. Upfront caveat: only 4 origins in a single late-2022 low-incidence window. Illustrative, not a comprehensive benchmark --- but the result on the next slide is clear-cut.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Holdout: 26 weeks in late 2022, covering the long DENV-3 outbreak tail.
+\item Skill score: $1 - \text{CRPS}_{\text{GP}}/\text{CRPS}_{\text{baseline}}$ --- $>$0 means GP wins, $<$0 means baseline wins.
+\item Origins: Jul 4, Aug 1, Aug 29, Sep 26, 2022. Horizons 4, 8, 13 weeks.
+\end{itemize}
+}
+
+## Forecasting: The GP Has No Predictive Skill
+
+\begin{columns}
+\begin{column}{0.35\textwidth}
+\includegraphics[width=\textwidth]{../results/figures/forecast_crps_vs_baselines.png}
+\vspace{0.05cm}
+\includegraphics[width=\textwidth]{../results/figures/forecast_rt_meanreversion.png}
+\end{column}
+\begin{column}{0.35\textwidth}
+\footnotesize
+\textbf{Top: GP loses to RW everywhere}
+\begin{itemize}\itemsep0pt
+\item \textbf{1.9$\times$, 2.9$\times$, 6.5$\times$ worse} (4, 8, 13 wk)
+\item Skill vs RW: $-7.6$, $-2.3$, $-10.5$
+\item Worse than $R_t=1$ beyond 4 wk
+\end{itemize}
+
+\vspace{0.15cm}
+
+\textbf{Bottom: $R_t$ collapses to the mean}
+\begin{itemize}\itemsep0pt
+\item Median $\to 1$ within ${\sim}3$ wk ($\approx \hat{\rho}$)
+\item Past $\hat{\rho}$, posterior $=$ prior
+\end{itemize}
+
+\vspace{0.15cm}
+
+\textbf{Why:} GP is a retrospective smoother, not a forward model.
+
+\vspace{0.1cm}
+
+\textbf{Interpretation:} operational forecasting needs mechanistic structure.
+\end{column}
+\end{columns}
+
+\note{
+\textbf{Say [$\sim$45 s]:} Top panel: mean CRPS by horizon comparing the GP to the two baselines. The red GP bars are taller than the blue random walk bars at every horizon --- 1.9, 2.9, and 6.5 times worse at 4, 8, and 13 weeks respectively. Skill scores against the random walk are $-$7.6, $-$2.3, and $-$10.5. The GP even loses to the trivial $R_t=1$ reference at horizons of 8 and 13 weeks. Bottom panel explains why: for every forecast origin, the posterior median $R_t$ collapses to 1 within roughly $\hat{\rho} \approx 3$ weeks of the cutoff. Past that, the credible band is essentially the prior --- the data have stopped informing the forecast. This is a \emph{structural} property of a Gaussian process, not a tuning problem. A GP is a smoothing prior, which is great for retrospective decomposition but has no mechanistic forward model. Operational forecasting needs something else. Reporting this negative result matters because the GP tracks the observed past very cleanly, so a naive reader might expect it to forecast well.
+
+\textbf{For Q\&A / backup:}
+\begin{itemize}\itemsep=0pt
+\item Window is late-2022 only, 4 origins --- limited generalisation.
+\item ``Regressing to the prior'' is not a bug in the sampler or prior; it's what any GP does beyond the length scale. Tuning $\rho$ longer would delay but not solve the problem.
+\item A plausible forecasting-capable extension is a spatially explicit multi-strain SIR that integrates the renewal equation forward under explicit immunity dynamics. Flagged in future work.
+\end{itemize}
+}
+
+## Branching Process: From $R_t$ to Outbreak Risk
+
+\footnotesize
+
+\textbf{Question:} $R_t$ is an \emph{average}. If one case arrives this week, what is the probability the chain \emph{sustains} rather than going extinct by chance?
+
+\vspace{0.1cm}
+
+\begin{columns}
+\begin{column}{0.55\textwidth}
+\textbf{Offspring:} each case produces $Y \sim \text{NB}(\text{mean}{=}R_t,\ \text{dispersion}{=}k)$ secondary infections (NB allows superspreading).
+
+\vspace{0.1cm}
+
+\textbf{Extinction equation:} let $q$ = probability that a lineage from one case dies out. Galton--Watson: $q$ is the smallest root in $[0,1]$ of $q = G(q)$, where $G(s) = E[s^Y]$ is the PGF:
+\[
+G(s) = \left(1 + \tfrac{R_t}{k}(1 - s)\right)^{-k}
+\]
+$R_t \leq 1 \Rightarrow q = 1$; $R_t > 1 \Rightarrow q \in (0,1)$ (solved numerically).
+
+\vspace{0.1cm}
+
+\textbf{Outbreak risk:} $P(\text{sustain}) = 1 - q$, computed per posterior draw of $(R_t, \phi)$ at every week, so $R_t$ uncertainty flows through. We use $k \leftarrow \phi$ as a pragmatic proxy.
+
+\vspace{0.1cm}
+
+\textbf{Caveat:} \emph{$P(\text{sustain})$ is a lens on potential risk, not a calibrated outbreak forecast.}
+
+\end{column}
+
+\begin{column}{0.40\textwidth}
+\textbf{Why it matters:}
+\begin{itemize}\itemsep1pt
+\item Non-linear near $R_t{=}1$: small shifts flip risk from $0$
+\item Turns $R_t$ into a vulnerability map
+\item Tests if switches open vulnerability windows
+\end{itemize}
+
+\vspace{0.1cm}
+
+\textbf{Assumptions of Galton-Watson that depart from dengue:}
+\begin{itemize}\itemsep1pt
+\item Homogeneous mixing: ignores spatial clustering around breeding sites or households
+\item Independent offspring 
+\item Infinite susceptible pool
+\item No antibody-dependent enhancement or cross-immunity between the 4 DENV serotypes
+\end{itemize}
+\end{column}
+\end{columns}
+
+\note{
+Let me walk through the methodology in some detail, because the quantity on the next slide --- the outbreak-sustaining probability --- follows from a very specific calculation and I want to be clear about every step.
+
+\textbf{Why a branching process.} $R_t$ is an average: the expected number of secondary cases per primary case in week $t$. But outbreak \textit{fate} is a stochastic question, not an average. Even when $R_t$ exceeds 1, a small introduction can still go extinct by chance; conversely, when $R_t$ is near but below 1, a lineage can persist for many generations before dying out. A branching process is the classical tool for turning the average $R_t$ into a probability statement about whether transmission chains survive, and the Galton--Watson process --- a discrete-generation branching process where each individual independently produces a random number of offspring from a common distribution --- is the simplest instance.
+
+\textbf{Why negative binomial offspring.} For a disease like dengue, secondary infections are heavily overdispersed: a few cases seed many onwards, most seed few or none (the superspreading phenomenon, Lloyd-Smith et al. 2005). Poisson offspring would encode variance equal to the mean, which is too tight; a negative binomial lets us separate the mean $R_t$ from the dispersion $k$. Smaller $k$ means more superspreading. The NB mean-dispersion parameterisation is exactly the parameterisation Stan uses in our observation model, which is convenient.
+
+\textbf{The PGF and the extinction equation.} The probability generating function of a non-negative integer random variable $Y$ is $G(s) = E[s^Y]$. For the NB with mean $R_t$ and dispersion $k$, some algebra gives $G(s) = (1 + (R_t/k)(1-s))^{-k}$. The classical Galton--Watson result says that the extinction probability of the whole process --- starting from one infected individual --- is the smallest non-negative fixed point of $q = G(q)$. Intuition: extinction occurs if either the first case produces zero offspring (probability $G(0)$), or it produces some offspring and every sublineage eventually goes extinct (probability $G(q)$ by independence and recursion). So $q = G(q)$. The function $s \mapsto G(s) - s$ always has $s = 1$ as a trivial root. When $R_t \leq 1$ that is the only root in $[0, 1]$, so $q = 1$ and extinction is certain. When $R_t > 1$ a second root appears in the open interval $(0, 1)$, and that is the true extinction probability.
+
+\textbf{Numerical solution.} We find this non-trivial root with R's \texttt{uniroot} on $h(s) = G(s) - s$ over $(10^{-12}, 1 - 10^{-12})$, with a fixed-point iteration as fallback if \texttt{uniroot} fails. Both converge to machine precision quickly because $h$ is smooth and monotone on the relevant interval.
+
+\textbf{Posterior propagation.} We evaluate this extinction probability \textit{per posterior draw} of $(R_t, \phi)$ at every modelled week, thinning to 1000 draws for runtime. That gives a posterior distribution of $q$ at every week, which we summarise as the median and 95 percent credible interval. So uncertainty in $R_t$ --- from the HSGP residual, the climate regression, and the intercept --- and uncertainty in the dispersion $\phi$ flow through the branching-process calculation coherently. The outbreak-sustaining probability shown on the next slide is simply $1 - q$.
+
+\textbf{The honest caveat about $k$.} We use the fitted observation-model dispersion $\phi$ as the offspring dispersion $k$. Strictly, $\phi$ describes week-to-week overdispersion in observed \textit{case counts} relative to the renewal-equation mean, not person-to-person variance in secondary infections. These are not the same quantity. Dengue's true offspring $k$ would ideally be estimated from contact-tracing or transmission-pair data, which we do not have. We treat $\phi$ as a pragmatic proxy; the qualitative shape of the $P(\text{sustain})$ trajectory is driven almost entirely by $R_t$ rather than by the precise value of $k$, so the ordering of vulnerability windows is robust, but the absolute probabilities should be read with this substitution in mind.
+
+\textbf{Why the Galton--Watson model is not fully realistic for dengue.} I want to be explicit that several core Galton--Watson assumptions do not hold for dengue. \textit{Homogeneous mixing}: the model assumes every infected person draws secondary infections from the same distribution, but dengue transmission is spatially clustered around mosquito breeding sites, households, and workplaces: effective offspring varies dramatically by location and micro-environment. \textit{Independent offspring}: the model assumes each case's secondary infections are independent draws, but in reality cases cluster because the same mosquitoes bite nearby people, so offspring within a lineage are correlated. \textit{Infinite susceptible pool}: Galton--Watson assumes an unlimited supply of susceptibles, whereas in a local outbreak the susceptibles in a neighbourhood are quickly depleted, which slows transmission endogenously: a saturation effect the branching process cannot capture. \textit{Single type}: we treat dengue as one homogeneous pathogen, ignoring the four serotypes, cross-immunity, and crucially antibody-dependent enhancement (ADE), in which a secondary heterologous infection can be \textit{more} transmissible or severe than the first. \textit{No vector stage}: dengue is vector-borne with an obligate mosquito intermediate; the ``offspring'' of a human case is really human $\to$ mosquito $\to$ human with stochastic delays driven by extrinsic incubation, mosquito lifespan, and biting rate. Galton--Watson compresses this into an instantaneous human-to-human step. \textit{No age or mobility structure}: susceptibility, clinical severity, and mobility all vary with age, and we have none of that. \textit{Discrete generations}: the model assumes fixed-generation structure, whereas dengue transmission has continuous, variable delays. The net effect is that our $P(\text{sustain})$ values should be read as a stylised risk lens --- an order-of-magnitude summary of how close to a critical point the system is --- not as a calibrated forecast of any particular outbreak outcome. For a realistic risk model you would want a stochastic SEIR or individual-based model with explicit vectors, age groups, serotype structure, and spatial heterogeneity.
+
+\textbf{What the analysis adds.} The branching process lens exposes the \textit{non-linearity} around $R_t = 1$ that the $R_t$ plot hides. A move from $R_t = 0.95$ to $R_t = 1.05$ looks tiny on the $R_t$ axis, but it flips $P(\text{sustain})$ from identically 0 to a strictly positive value. A move from $R_t = 1.05$ to $R_t = 1.15$ is a much larger jump in sustaining probability than its $R_t$ delta would suggest. So this slide converts the $R_t$ posterior into a risk map: at each week, how likely is an introduction now to ignite a sustained chain? On the next slide we overlay this with the serotype switch events and ask whether switches open vulnerability windows.
+}
+
+## Branching Process: Vulnerability Windows
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\includegraphics[width=\textwidth]{../results/figures/branching_extinction_probability.png}
+
+\footnotesize
+Strong anticorrelation: $\rho_{\text{Spearman}} = -0.94$ between $R_t$ and extinction probability.
+\end{column}
+\begin{column}{0.48\textwidth}
+\includegraphics[width=\textwidth]{../results/figures/branching_serotype_switches.png}
+
+\footnotesize
+\textbf{5/7 switches} show increased $P(\text{sustain})$ post-switch (mean: +6 pp). 2022: 18 weeks of $P(\text{sustain}) > 0.5$.
+\end{column}
+\end{columns}
+
+\note{
+Connecting Rt estimates to outbreak risk via branching process theory, we find a strong anticorrelation between Rt and extinction probability: Spearman rho of minus 0.94. Even small Rt changes translate to large changes in outbreak sustaining probability.
+
+Five of seven serotype switches show increased sustaining probability post-switch, with a mean increase of 6 percentage points. The 2022 outbreak is striking: 18 consecutive weeks of sustaining probability above 0.5 and mean Rt of 1.17: the most sustained transmission in our observation period, coinciding with DENV-3 circulation.
+}
+
+# Discussion
+
+## Limitations
+
+\footnotesize
+
+\begin{columns}
+\begin{column}{0.48\textwidth}
+\textbf{Methodological:}
+\begin{enumerate}\itemsep=2pt
+\item \textbf{GP dominance is partly structural.} With $\hat{\rho} \approx 3$ wks the GP can absorb \emph{any} smooth variation, so the 99.4\% residual share is \textit{consistent with} serotype-driven dynamics but does not \textit{prove} them. ``Residual'' means non-climate, not ``serotype.''
+\item \textbf{Climate is scale-dependent.} $<$1\% share at weekly resolution $\neq$ climate is unimportant overall --- it likely acts through seasonal vector-ecology timescales a weekly GP is not built to resolve.
+\item \textbf{GP has no forward mechanism.} The GP smooths \emph{past} $R_t$; it contains no vector dynamics, immunity, or importations to propagate forward. Beyond ${\sim}\hat{\rho} \approx 3$ wks, the posterior collapses to the prior mean $R_t \approx 1$ and the forecast stops carrying information. \emph{Structural, not a tuning issue.}
+\item \textbf{Generation interval is fixed.} Built via Monte Carlo convolution at point estimates; its uncertainty is not propagated into $R_t$.
+\end{enumerate}
+\end{column}
+\begin{column}{0.48\textwidth}
+\textbf{Epidemiological \& data:}
+\begin{enumerate}\itemsep=2pt
+\setcounter{enumi}{4}
+\item \textbf{$n = 7$ switch events.} Descriptive, pattern-based evidence (post-switch elevation, ${\sim}8$-mo CCF lead); no formal hypothesis testing possible.
+\item \textbf{Constant case ascertainment assumed.} Cancels in the Cori renewal-equation framework, but Tan et al.\ 2019 report serotype-dependent infection-to-notification ratios of 3:1 to 16:1, which could bias post-hoc serotype interpretation.
+\item \textbf{Spatial \& serotype aggregation.} National, single-pool model. The susceptible-sensitivity sweep already showed an aggregate SIR pool \emph{cannot} reproduce the residual amplitude --- so local heterogeneity and serotype-specific immunity are doing real work.
+\item \textbf{11-year window.} The ${\sim}3.6$-yr spectral peak spans fewer than 3 complete cycles in our data --- the theoretical multi-serotype signature is suggestive, not established.
+\end{enumerate}
+\end{column}
+\end{columns}
+
+\note{
+Eight limitations, four methodological on the left and four epidemiological or data-side on the right.
+
+\textbf{Methodological side.} \textit{First}, the dominance of the residual GP is partly structural. With an estimated length scale of about 3 weeks the GP can absorb any reasonably smooth variation in $\log R_t$, so the 99.4\% variance share is consistent with a serotype-driven signal but does not prove one. ``Residual'' literally just means ``everything the climate covariates did not capture.'' The causal claim has to come from the temporal match between residual excursions and switch events, not from the variance number itself.
+
+\textit{Second}, the climate result is scale-dependent. Climate explains less than 1\% of weekly $R_t$ variance, but that is a statement about the weekly time-scale specifically. Climate almost certainly matters for dengue overall --- it drives the vector life cycle on seasonal timescales --- and a model with monthly or seasonal kernels would likely attribute much more to it. We are not claiming climate is unimportant; we are claiming it is not what moves $R_t$ from one week to the next.
+
+\textit{Third, and this is the one worth dwelling on:} the forecasting failure is structural. The GP is a \emph{retrospective smoother}: it looks at the sequence of past observations and produces a smooth estimate of $R_t$ that interpolates between them, with credible intervals that tighten where there are observations and widen where there are gaps. Crucially, the GP does not contain any equations for vector dynamics, susceptible depletion, importations, or anything else that would drive $R_t$ forward in time. It has no forward model. So when we ask the GP to forecast $R_t$ beyond the last observed week, there is no data to smooth toward and the posterior shrinks back toward the prior. By about $\hat{\rho} \approx 3$ weeks past the forecast origin, the posterior median is effectively at $R_t = 1$, the prior mean, and the credible bands are essentially the prior bands: the forecast contains no information from the model. This is why the GP cannot beat a random walk at operational horizons, and why this is \textit{not} a tuning problem --- no hyperparameter adjustment fixes the absence of a forward mechanism. Any real forecasting system would need a mechanistic component (a vector model, a serotype-stratified SIR) to propagate $R_t$ forward through time.
+
+\textit{Fourth}, the generation interval is fixed rather than jointly estimated. We built it from Monte Carlo convolution of biological components at point-estimate values. Sensitivity analysis across 25--27$^\circ$C EIP scenarios shows the core variance decomposition is qualitatively stable, but the posterior on $R_t$ does not reflect GI uncertainty. Joint estimation would tighten inference and let the data speak about the GI itself.
+
+\textbf{Epidemiological and data side.} \textit{Fifth}, with only seven switch events in 11 years, the serotype analysis is inherently descriptive. Formal hypothesis testing is not meaningful at this sample size. What we can do is ask whether the temporal profiles line up with theoretical predictions in direction and timing, and they do.
+
+\textit{Sixth}, we assume constant case ascertainment. A constant reporting fraction cancels out of the Cori renewal-equation $R_t$ estimator, which is why this assumption is defensible for the core variance-decomposition result. But Tan et al.\ 2019 estimate infection-to-notification ratios in Singapore vary from about 3:1 to 16:1 depending on serotype and period. If ascertainment differs systematically between DENV-2 and DENV-3 cases, the post-hoc serotype analysis could be biased in ways we cannot fix from case data alone.
+
+\textit{Seventh}, spatial and serotype aggregation. We treat Singapore as a single spatial unit with a single aggregate susceptible pool. The susceptible-pool sensitivity sweep we showed earlier already told us that an aggregate SIR cannot mechanistically produce the residual amplitude we observe --- so this is not just a modelling convenience, it is actively wrong for generating the signal we are trying to explain. Local neighbourhood heterogeneity and serotype-specific susceptible pools are likely doing real work, and a spatially-explicit, multi-serotype SIR directly targets this.
+
+\textit{Eighth}, the 11-year observation window is short for multi-year dynamics. The 3.6-year peak in the residual power spectrum spans fewer than three complete cycles of data, so our evidence for the theoretically-predicted four-serotype rotation is suggestive rather than established. A longer observation window would dramatically strengthen or weaken that claim.
+}
+
+## Conclusions \& Future Directions
+
+\vspace{0.2cm}
+
+\textbf{Key takeaways:}
+
+\begin{enumerate}
+\item Climate explains $<$1\% of weekly $R_t$ variance; the residual GP captures $\sim$99.4\%
+\item Serotype switches associate with elevated $R_t$ (5/7 events); serotype turnover rate leads $R_t$ by $\sim$8 months
+\item \textbf{The residual tracks complex unobserved processes that explicit susceptibility cannot reproduce.} Maybe the residual is tracking spatial heterogeneity, importations, vector dynamics, or finer immune complexity beyond simple SIR-pool accounting
+\item Decomposition is robust across climate lags, GP hyperprior means, and 4 kernels
+\item GP provides \textbf{no forecasting skill}: tends to "revert to the mean"
+\end{enumerate}
+
+\vspace{0.3cm}
+
+\textbf{Future directions:}
+
+\begin{enumerate}
+\item \textbf{Spatially explicit, multi-serotype SIR fitted at NEA cluster level}: the susceptible-pool sensitivity sweep shows aggregate immunity \emph{cannot} produce the observed residual; maybe we need both serotype-specific compartments and spatial heterogeneity
+\item Benchmark against deep generative baselines (VAE, transformer, foundation models) on matched feature sets
+\end{enumerate}
+
+\note{
+To summarize, five key takeaways. First, climate is genuinely negligible at weekly resolution. Second, serotype switches associate with elevated Rt, with turnover providing roughly 8 months of lead time.
+
+Third --- and this is the most important qualifier on the serotype story --- the residual tracks something that explicit susceptibility, even in its most generous serotype-aware form, cannot reproduce. In the M0/M1/M2 nested comparison, the GP amplitude alpha-hat is 0.307 in M0, 0.307 in M1 with serotype-blind S\_pop, and 0.305 in M2 with serotype-aware S\_dom. Adding either susceptible covariate did not shrink the GP at all. Beta\_S sits near zero in both extended models with credible intervals comfortably including zero. So the descriptive serotype-residual associations are real, but they are not reproduced when we instantiate the simplest mechanistic story behind them. Whatever the residual is tracking is more complex than a national-level susceptible pool can capture: candidate explanations include spatial heterogeneity in immunity, importation pulses, vector or behavioural dynamics that happen to co-vary with serotype shifts, or individual-level immune complexity such as cross-immunity and antibody-dependent enhancement that simple SIR-pool accounting structurally cannot represent. This is the bridge to the future-work direction below.
+
+Fourth, the variance decomposition is bulletproof: it survives climate lag perturbations, GP hyperprior sweeps over both alpha and rho, and all four standard kernel specifications. Fifth, the GP provides no forecasting skill --- an honest negative result that's important to report.
+
+Looking forward, the most important extension is a spatially explicit, multi-serotype SIR fitted at the NEA cluster level. Spatial disaggregation and serotype structure are not two separable extensions but one interlocking one, and this work directly motivates both. The susceptible-pool sensitivity sweep showed that a smooth national-level susceptible compartment cannot generate $\log S_{\text{eff}}$ swings as large as the GP amplitude under any realistic combination of expansion factor, initial susceptibility, births, or waning. Mechanistically generating residual variation of the size we observe therefore requires both serotype-specific susceptible compartments --- so one serotype's pool can be exhausted while another's stays fresh, producing the sharp transitions a single-pool model cannot --- and spatial heterogeneity --- so that sub-population pools can be locally depleted and replenished much faster than national averages. Serotype structure alone at the national scale would still miss the spatial pockets of naive susceptibles visible at cluster level; spatial disaggregation alone without serotype compartments would still be unable to explain why the February 2020 DENV-3 emergence produces thousands of attributable cases while the 2016 DENV-1/DENV-2 rotations are essentially silent. The two are load-bearing for each other.
+
+A spatially-aware multi-strain SIR also addresses the structural forecasting failure: it integrates the renewal equation forward under explicit immunity dynamics, providing the forward simulation capability a smoothing GP structurally lacks. Singapore is unusually well positioned for this extension --- NEA publishes case data at the cluster level, the Wolbachia release sites give neighbourhood-level natural experiments, and the serotype surveillance series spans the full study period. The aggregation to the national scale in the present work was a modelling choice driven by GP tractability, not a data constraint.
+
+One smaller extension is also worth flagging. A thorough comparison against deep generative baselines --- variational autoencoders, time-series transformers, foundation models for epidemiology --- on matched feature sets would quantify how much of the GP residual structure is recoverable from raw cases alone; the preliminary single-architecture VAE pilot we ran was not a fair test of this question and is left as future work.
+
+Thank you.
+}
+
+## {.plain}
+
+\vspace{2cm}
+\begin{center}
+{\Large Thank you}
+
+\vspace{0.5cm}
+
+{\large Questions?}
+
+\vspace{1cm}
+
+\footnotesize
+Code and data available in the submitted repository.
+\end{center}
+
+\note{
+Thank you for your attention. I'm happy to take any questions. The full code repository and data pipeline are available in the submitted materials.
+}
+
+## Key References
+
+\footnotesize
+
+\textbf{Methodology}
+\begin{itemize}\itemsep0pt
+\item Cori A. et al.\ (2013). A new framework and software to estimate time-varying reproduction numbers during epidemics. \textit{Am.\ J.\ Epidemiol.} 178(9):1505--1512.
+\item Riutort-Mayol G. et al.\ (2023). Practical Hilbert space approximate Bayesian Gaussian processes for probabilistic programming. \textit{Stat.\ Comput.} 33:17.
+\item Abbott S. et al.\ (2020). Estimating the time-varying reproduction number of SARS-CoV-2 using national and subnational case counts. \textit{Wellcome Open Res.} 5:112 (EpiNow2).
+\end{itemize}
+
+\vspace{0.15cm}
+
+\textbf{Dengue biology \& Singapore epidemiology}
+\begin{itemize}\itemsep0pt
+\item Chan M., Johansson M.A.\ (2012). The incubation periods of dengue viruses. \textit{PLoS ONE} 7(11):e50972.
+\item Bhatt S. et al.\ (2013). The global distribution and burden of dengue. \textit{Nature} 496:504--507.
+\item Wearing H.J., Rohani P.\ (2006). Ecological and immunological determinants of dengue epidemics. \textit{PNAS} 103(31):11802--11807.
+\item Reich N.G. et al.\ (2013). Interactions between serotypes of dengue highlight epidemiological impact of cross-immunity. \textit{J.\ R.\ Soc.\ Interface} 10(86):20130414.
+\item Rajarethinam J. et al.\ (2018). Dengue in Singapore from 2004 to 2016. \textit{Am.\ J.\ Trop.\ Med.\ Hyg.} 99(1):204--210.
+\item Tan L.K. et al.\ (2019). Force of infection and true infection rate of dengue in Singapore. \textit{Am.\ J.\ Epidemiol.} 188(8):1529--1538.
+\item Finch E. et al.\ (2025). Climate variation and serotype competition drive dengue outbreak dynamics in Singapore. \textit{Nat.\ Commun.} 16:11364.
+\end{itemize}
+
+\note{
+Full bibliography and all derivations are in the accompanying report. These are the load-bearing references underpinning each major component of the talk.
+}

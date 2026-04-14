@@ -117,12 +117,7 @@ The residual GP dominates, capturing nearly all Rt variation at weekly resolutio
 
 ### Posterior Predictive Check
 
-| Coverage level | Empirical |
-|----------------|-----------|
-| 80% | 92.3% |
-| 95% | 97.7% |
-
-Slightly conservative (over-coverage). The posterior predictive intervals track observed epidemic peaks well (2013–2014, 2016, 2019–2020, 2022).
+The posterior predictive intervals track observed epidemic peaks well (2013–2014, 2016, 2019–2020, 2022). However, pointwise intervals under-cover weekly fluctuations — the negative binomial dispersion is too tight to absorb weekly shock structure. Flagged as an observation-layer limitation; the latent Rt decomposition is still credible.
 
 ### Prior Predictive Check
 
