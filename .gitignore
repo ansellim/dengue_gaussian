@@ -55,3 +55,10 @@ report/*.aux
 report/*.log
 report/*.tex
 report/report_files/
+
+# Rendered slides and speaker notes (regenerable from slides.qmd)
+report/slides.pdf
+report/speaker_notes.md
+
+# Ad-hoc speaker-notes renderer (not part of analysis pipeline)
+code/render_speaker_notes.R
