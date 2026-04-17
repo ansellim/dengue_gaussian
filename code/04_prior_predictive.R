@@ -256,17 +256,30 @@ Rt_summary <- tibble(
 )
 
 p_Rt_intervals <- ggplot(Rt_summary, aes(x = week)) +
-  geom_ribbon(aes(ymin = q05, ymax = q95), fill = "steelblue", alpha = 0.2) +
-  geom_ribbon(aes(ymin = q25, ymax = q75), fill = "steelblue", alpha = 0.4) +
-  geom_line(aes(y = median), color = "steelblue", linewidth = 1) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "red") +
+  geom_ribbon(aes(ymin = q05, ymax = q95, fill = "90% interval"), alpha = 0.9) +
+  geom_ribbon(aes(ymin = q25, ymax = q75, fill = "50% interval"), alpha = 0.9) +
+  geom_line(aes(y = median, color = "Median"), linewidth = 1) +
+  geom_hline(aes(yintercept = 1, linetype = "Rt = 1"), color = "red") +
+  scale_fill_manual(
+    name = NULL,
+    values = c("90% interval" = "#cfe0ee", "50% interval" = "#7fa9ce"),
+    breaks = c("50% interval", "90% interval")
+  ) +
+  scale_color_manual(name = NULL, values = c("Median" = "steelblue")) +
+  scale_linetype_manual(name = NULL, values = c("Rt = 1" = "dashed")) +
+  guides(
+    fill = guide_legend(order = 1),
+    color = guide_legend(order = 2),
+    linetype = guide_legend(order = 3, override.aes = list(color = "red"))
+  ) +
   coord_cartesian(ylim = c(0, 4)) +
   labs(
     title = "Prior Predictive: Rt Intervals",
     subtitle = "Median with 50% and 90% intervals",
     x = "Week",
     y = "Rt"
-  )
+  ) +
+  theme(legend.position = "bottom", legend.box = "horizontal")
 
 # --- Combine and save (slide-friendly 2-panel: Rt intervals + case distribution) ---
 p_combined <- p_Rt_intervals | p_cases_dist
